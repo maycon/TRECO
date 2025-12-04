@@ -1,16 +1,16 @@
 # TRECO
 
 <div align="center">
-  <img src="static/treco.png" alt="TRECO Logo" width="220" />
-</div>
+<img src="static/treco.png" alt="TRECO Logo" width="220" />
 
 **T**actical **R**ace **E**xploitation & **C**oncurrency **O**rchestrator
 
-A specialized framework for identifying and exploiting race condition vulnerabilities in HTTP APIs through precise concurrent request orchestration.
+*A specialized framework for identifying and exploiting race condition vulnerabilities in HTTP APIs.*
 
 [![Python 3.14t](https://img.shields.io/badge/python-3.14t-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Free-Threaded](https://img.shields.io/badge/GIL-Free-green.svg)](https://peps.python.org/pep-0703/)
+</div>
 
 ---
 
