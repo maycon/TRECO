@@ -1,5 +1,9 @@
 # TRECO
 
+<div align="center">
+  <img src="static/treco.png" alt="TRECO Logo" width="220" />
+</div>
+
 **T**actical **R**ace **E**xploitation & **C**oncurrency **O**rchestrator
 
 A specialized framework for identifying and exploiting race condition vulnerabilities in HTTP APIs through precise concurrent request orchestration.
@@ -640,19 +644,28 @@ MIT License - see LICENSE file for details
 
 ---
 
+
 ## Acknowledgments
 
 - Built with Python, Requests, and Jinja2
 - Inspired by real-world security research
+- Special thanks to [TREM](https://github.com/otavioarj/TREM), which inspired the initial idea and approach for this project.
 - Thanks to the security research community
 
 ---
+
 
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/maycon/TRECO/issues)
 - **Documentation**: This README
 - **Security**: Report vulnerabilities responsibly
+
+---
+
+## Related Projects & PoCs
+
+- For practical race condition testing, see the [Hack N' Roll Racing Bank](https://github.com/maycon/racing-bank), which can be used as a vulnerable target for TRECO demonstrations and experiments.
 
 ---
 
