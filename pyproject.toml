@@ -1,0 +1,48 @@
+[project]
+name = "treco"
+version = "1.0.0"
+description = "Tactical Race Exploitation & Concurrency Orchestrator"
+authors = [
+    { name = "Maycon Vitali", email = "maycon@hacknroll.com" },
+    { name = "TRECO Contributors" },
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.14"
+keywords = ["security", "race-condition", "http", "testing", "concurrency"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+]
+
+dependencies = [
+    "requests>=2.31.0",
+    "pyyaml>=6.0.1",
+    "jinja2>=3.1.2",
+    "pyotp>=2.9.0",
+    "colorama>=0.4.6",
+    "jsonpath-ng>=1.6.0",
+    "black>=25.11.0",
+    "flake8>=7.3.0",
+]
+
+[project.scripts]
+treco = "treco.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312', 'py313']
+
+[tool.mypy]
+python_version = "3.14t"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
