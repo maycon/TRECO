@@ -69,7 +69,7 @@ class RaceCoordinator:
         # Initialize execution context
         import os
 
-        self.context = ExecutionContext(argv=cli_args or {}, env=dict(os.environ), config = asdict(self.config))
+        self.context = ExecutionContext(argv=cli_args or {}, env=dict(os.environ))
 
         # Initialize components
         self.template_engine = TemplateEngine()
