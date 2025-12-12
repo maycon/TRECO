@@ -18,6 +18,22 @@ A specialized framework for identifying and exploiting race condition vulnerabil
    installation
    quickstart
 
+.. toctree::
+   :maxdepth: 2
+   :caption: User Guide
+
+   configuration
+   extractors
+   templates
+   examples
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
+
+   cli
+   api
+
 Overview
 --------
 
@@ -59,6 +75,7 @@ Quick Example
    metadata:
      name: "Race Condition Test"
      version: "1.0"
+     author: "Security Researcher"
      vulnerability: "CWE-362"
 
    config:
@@ -170,12 +187,26 @@ Dynamic HTTP request generation with Jinja2:
 * Support for complex request bodies and headers
 * Multi-line YAML support for readability
 
+**Data Extractors**
+
+Plugin-based response parsing:
+
+* JSONPath for JSON responses
+* XPath for XML/HTML responses
+* Regex for custom patterns
+* Boundary for delimiter-based extraction
+* Header and Cookie extractors
+
 Learn More
 ----------
 
 * :doc:`about` - Complete overview of TRECO's capabilities and architecture
 * :doc:`installation` - Step-by-step installation guide
 * :doc:`quickstart` - Your first race condition test in 5 minutes
+* :doc:`configuration` - Complete YAML configuration reference
+* :doc:`extractors` - All available data extractors
+* :doc:`templates` - Template syntax and filters
+* :doc:`examples` - Real-world attack examples
 
 Getting Help
 ------------

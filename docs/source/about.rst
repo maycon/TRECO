@@ -115,7 +115,7 @@ Core Capabilities
    Race window calculation, vulnerability detection, and detailed statistics reporting
 
 🔌 **Extensible Design**
-   Plugin-based extractors (regex, JSONPath, XPath) and custom connection strategies
+   Plugin-based extractors (regex, JSONPath, XPath, boundary, header, cookie) and custom connection strategies
 
 Advanced Features
 ~~~~~~~~~~~~~~~~~
@@ -126,25 +126,28 @@ Advanced Features
 * Conditional transitions based on status codes and response content
 * Context sharing between states
 * Sequential and parallel execution
+* Thread propagation modes (single/parallel)
 
 **Data Extraction**
 
 * JSONPath for JSON responses
 * XPath for XML/HTML responses
 * Regular expressions for custom patterns
-* Automatic variable binding
+* Boundary extraction for delimiter-based data
+* Header extraction for response headers
+* Cookie extraction from Set-Cookie headers
 
 **Request Templates**
 
 * Dynamic HTTP request generation
 * Variable interpolation
-* Custom Jinja2 filters
+* Custom Jinja2 filters (totp, md5, sha1, sha256, env, argv, average)
 * Multi-line support with YAML pipe syntax
 
 **Logging & Reporting**
 
 * Per-state and per-thread logging
-* Detailed timing statistics (min, max, avg, p95, p99)
+* Detailed timing statistics (min, max, avg)
 * Race window analysis
 * Vulnerability assessment
 
@@ -191,9 +194,9 @@ Components
 
 **Extractor Framework**
 
-* Plugin-based architecture
-* JSONPath, XPath, Regex extractors
-* Custom extractor support
+* Plugin-based architecture with auto-discovery
+* JSONPath, XPath, Regex, Boundary, Header, Cookie extractors
+* Custom extractor support via ``@register_extractor`` decorator
 * Automatic variable binding
 
 Execution Flow
@@ -381,37 +384,13 @@ Requirements
 Project Status
 --------------
 
-**Current Version**: 0.1.0 (Alpha)
+**Current Version**: 1.0.0
 
-**Development Status**: Active Development
+**Development Status**: Beta
 
-**Production Ready**: No (use at your own risk)
+**Production Ready**: Use at your own risk
 
-**API Stability**: Experimental (subject to breaking changes)
-
-Roadmap
-~~~~~~~
-
-**Version 0.2** (Q1 2025)
-
-* Loop support (for, while, until)
-* Enhanced conditionals (multi-condition when blocks)
-* Improved error handling
-* More examples and documentation
-
-**Version 0.3** (Q2 2025)
-
-* Parallel state execution (fork/join)
-* Sub-state machines (reusable flows)
-* HTTP/2 support
-* Performance optimizations
-
-**Version 1.0** (Q3 2025)
-
-* Stable API
-* Comprehensive test coverage
-* Production-ready features
-* Complete documentation
+**API Stability**: Stable
 
 Contributing
 ------------
