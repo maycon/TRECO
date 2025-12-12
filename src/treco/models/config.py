@@ -94,12 +94,12 @@ class Transition:
     State transition rule based on HTTP response.
 
     Attributes:
-        on_status: HTTP status code that triggers this transition
+        on_status: HTTP status code(s) that triggers this transition
         goto: Name of the next state to transition to
         delay_ms: Optional delay in milliseconds before transition
     """
 
-    on_status: int
+    on_status: List[int]
     goto: str
     delay_ms: int = 0
 
