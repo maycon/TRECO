@@ -118,7 +118,7 @@ class HTTPClient:
             method = method,
             url = url,
             headers = headers,
-            allow_redirects = self.config.http.allow_redirects,
+            allow_redirects = self.config.http.follow_redirects,
             data = body,
             timeout = 30,
         )

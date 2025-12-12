@@ -46,10 +46,10 @@ class HTTPConfig:
     HTTP client configuration.
 
     Attributes:
-        allow_redirects: Whether to allow redirects
+        follow_redirects: Whether to follow redirects
     """
 
-    allow_redirects: bool = True
+    follow_redirects: bool = True
 
 
 @dataclass
