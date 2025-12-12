@@ -6,7 +6,7 @@ providing type safety and validation.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Any, Union
+from typing import Optional, Dict, List, Any
 
 
 @dataclass
