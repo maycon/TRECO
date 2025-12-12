@@ -11,15 +11,12 @@ from dataclasses import dataclass
 import logging
 
 from treco.http.extractor import extract_all
-from treco.http.extractor.base import BaseExtractor
-from treco.models.config import ExtractPattern
-
 
 logger = logging.getLogger(__name__)
 
 from treco.models import State, ExecutionContext
 from treco.template import TemplateEngine
-from treco.http import HTTPClient, HTTPParser, Extractors
+from treco.http import HTTPClient
 
 
 @dataclass

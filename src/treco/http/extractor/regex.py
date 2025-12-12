@@ -1,27 +1,28 @@
 """
-Data extractor using regex patterns.
+Regex extractor module.
 
-Extracts structured data from HTTP responses.
+Extracts data from HTTP responses using regular expression patterns.
 """
 
-from abc import abstractmethod
 import re
-from typing import Dict, Any, Optional
+import logging
+from typing import Any, Optional
 import requests
 
-import logging
-
-from treco.http.extractor.base import BaseExtractor
+from treco.http.extractor.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
 
 
+@register_extractor('regex', aliases=['re', 'regexp', 'regular_expression'])
 class RegExExtractor(BaseExtractor):
     """
     Extracts data from HTTP responses using regex patterns.
 
     The extractor applies regex patterns to response text and
     captures groups as variables.
+    
+    Registered as 'regex' with aliases 're', 'regexp', and 'regular_expression'.
 
     Example:
         extractor = RegExExtractor()
@@ -43,20 +44,15 @@ class RegExExtractor(BaseExtractor):
 
         Args:
             response: HTTP response object
-            patterns: Dictionary of variable_name -> regex_pattern
+            pattern: Regex pattern string
 
         Returns:
-            Dictionary of extracted variables
+            Extracted value or None if not found
 
         Example:
-            patterns = {
-                "bearer_token": r'"token":\\s*"([^"]+)"',
-                "user_id": r'"id":\\s*(\\d+)',
-                "balance": r'"balance":\\s*(\\d+\\.?\\d*)'
-            }
-
-            extracted = extractor.extract(response, patterns)
-            # {"bearer_token": "xyz...", "user_id": "42", "balance": "1000"}
+            pattern = r'"bearer_token":\\s*"([^"]+)"'
+            extracted = extractor.extract(response, pattern)
+            # "xyz..."
         """
         response_text = response.text
 

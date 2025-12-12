@@ -1,41 +1,63 @@
-from typing import Dict, Optional, Type
+"""
+Extractor package.
+
+Provides data extractors for HTTP responses with auto-discovery support.
+New extractors can be added simply by creating a new module and decorating
+the extractor class with @register_extractor.
+
+Example of creating a new extractor:
+
+    # In a new file, e.g., xpath.py
+    from treco.http.extractor.base import BaseExtractor
+    from treco.http.extractor.registry import register_extractor
+    
+    @register_extractor('xpath', aliases=['xml_path'])
+    class XPathExtractor(BaseExtractor):
+        def extract(self, response, pattern):
+            # Implementation here
+            ...
+
+The extractor will be automatically discovered and available via:
+    get_extractor('xpath')
+"""
+
+from typing import Dict, Optional
 
 import requests
 
 from treco.models.config import ExtractPattern
+from treco.http.extractor.base import BaseExtractor, ExtractorRegistry, UnknownExtractorError, register_extractor
 
-from treco.http.extractor.base import BaseExtractor
-from treco.http.extractor.regex import RegExExtractor
-from treco.http.extractor.jpath import JPathExtractor
-
-
-# Map pattern_type to extractor class
-EXTRACTOR_REGISTRY: Dict[str, Type[BaseExtractor]] = {
-    "regex": RegExExtractor,
-    # "xpath": XPathExtractor,
-    "jpath": JPathExtractor,
-}
-
-
-class UnknownExtractorError(Exception):
-    pass
 
 
 def get_extractor(pattern_type: str) -> BaseExtractor:
-    """Return an extractor instance for the given pattern type."""
-    try:
-        extractor_cls = EXTRACTOR_REGISTRY[pattern_type]
-    except KeyError:
-        raise UnknownExtractorError(f"Unknown pattern_type: {pattern_type}")
-    return extractor_cls()
+    """
+    Return an extractor instance for the given pattern type.
+    
+    Args:
+        pattern_type: The type or alias of the extractor (e.g., 'regex', 'jpath')
+        
+    Returns:
+        An instance of the appropriate extractor class
+        
+    Raises:
+        UnknownExtractorError: If no extractor is registered for the given type
+    """
+    return ExtractorRegistry.get_instance(pattern_type)
 
 
 def extract_all(
     response: requests.Response, extracts: Dict[str, ExtractPattern]
 ) -> Dict[str, Optional[str]]:
-    """Run all patterns in `extracts` against `response`.
+    """
+    Run all patterns in `extracts` against `response`.
 
-    extracts: Dict[logical_name, ExtractPattern]
+    Args:
+        response: HTTP response object
+        extracts: Dict[logical_name, ExtractPattern]
+        
+    Returns:
+        Dictionary mapping logical names to extracted values
     """
     results: Dict[str, Optional[str]] = {}
 
@@ -44,3 +66,21 @@ def extract_all(
         results[name] = extractor.extract(response, pattern.pattern_data)
 
     return results
+
+
+# Public API
+__all__ = [
+    # Core classes
+    'BaseExtractor',
+    'ExtractorRegistry',
+    
+    # Decorator
+    'register_extractor',
+    
+    # Functions
+    'get_extractor',
+    'extract_all',
+    
+    # Exceptions
+    'UnknownExtractorError',
+]
