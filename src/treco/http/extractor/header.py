@@ -8,8 +8,7 @@ import logging
 from typing import Any, Optional
 import requests
 
-from treco.http.extractor.base import BaseExtractor
-from treco.http.extractor.registry import register_extractor
+from treco.http.extractor.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
 
