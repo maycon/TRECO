@@ -246,6 +246,6 @@ class StateMachine:
             Matching Transition object or None
         """
         for transition in state.next:
-            if transition.on_status == status_code:
+            if status_code in transition.on_status:
                 return transition
         return None
