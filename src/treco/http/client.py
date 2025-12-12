@@ -115,7 +115,12 @@ class HTTPClient:
 
         # Send request
         response = self.session.request(
-            method=method, url=url, headers=headers, data=body, timeout=30
+            method = method,
+            url = url,
+            headers = headers,
+            allow_redirects = self.config.http.allow_redirects,
+            data = body,
+            timeout = 30,
         )
 
         return response

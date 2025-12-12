@@ -40,6 +40,17 @@ class TLSConfig:
     enabled: bool = False
     verify_cert: bool = False
 
+@dataclass
+class HTTPConfig:
+    """
+    HTTP client configuration.
+
+    Attributes:
+        allow_redirects: Whether to allow redirects
+    """
+
+    allow_redirects: bool = True
+
 
 @dataclass
 class ServerConfig:
@@ -52,6 +63,7 @@ class ServerConfig:
         threads: Default number of concurrent threads
         reuse_connection: Whether to reuse TCP connections
         tls: TLS/SSL configuration
+        http: HTTP client configuration
     """
 
     host: str
@@ -59,6 +71,7 @@ class ServerConfig:
     threads: int = 20
     reuse_connection: bool = False
     tls: TLSConfig = field(default_factory=TLSConfig)
+    http: HTTPConfig = field(default_factory=HTTPConfig)
 
 
 @dataclass
