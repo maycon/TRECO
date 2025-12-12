@@ -86,7 +86,7 @@ class Transition:
         delay_ms: Optional delay in milliseconds before transition
     """
 
-    on_status: Union[int, List[int]]
+    on_status: List[int]
     goto: str
     delay_ms: int = 0
 
