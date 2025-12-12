@@ -150,14 +150,19 @@ class ConfigValidator:
             raise ValueError(
                 f"State '{state_name}' transition {idx} references non-existent state: {target_state}"
             )
-
+        
         # on_status is optional (default 0 = always transition)
         if "on_status" in transition:
             status = transition["on_status"]
-            if not isinstance(status, int) or status < 0:
-                raise ValueError(
-                    f"State '{state_name}' transition {idx} has invalid on_status: {status}"
-                )
+            if isinstance(status, int):
+                status = [status]
+
+            for s in status:
+                if not isinstance(s, int) or s < 0:
+                    raise ValueError(
+                        f"State '{state_name}' transition {idx} has invalid on_status: {s}"
+                    )
+
 
     def _validate_race_config(self, state_name: str, race: Dict[str, Any]) -> None:
         """

@@ -10,7 +10,8 @@ from typing import Dict, Any
 
 import logging
 
-from treco.models.config import ExtractPattern
+from treco.models.config import ExtractPattern, HTTPConfig
+from treco.template.engine import TemplateEngine
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class YAMLLoader:
     def __init__(self):
         """Initialize the YAML loader with a validator."""
         self.validator = ConfigValidator()
+        self.engine = TemplateEngine()
 
     def load(self, filepath: str) -> Config:
         """
@@ -111,17 +113,36 @@ class YAMLLoader:
             verify_cert=tls_data.get("verify_cert", False),
         )
 
+        http_data = data.get("http", {})
+        http_config = HTTPConfig(
+            follow_redirects=http_data.get("follow_redirects", True)
+        )
+
         return ServerConfig(
-            host=data["host"],
+            host=self.engine.render(data["host"], {}),
             port=data["port"],
             threads=data.get("threads", 20),
             reuse_connection=data.get("reuse_connection", False),
             tls=tls_config,
+            http=http_config
         )
 
     def _build_entrypoints_input(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Build input dictionary for Entrypoint."""
-        return {key: value for key, value in data.items()}
+        if not data:
+            return {}
+        
+        result: Dict[str, Any] = {}
+        
+        for key, value in data.items():
+            if isinstance(value, str):
+                result[key] = self.engine.render(value, {})
+            elif isinstance(value, dict):
+                result[key] = self._build_entrypoints_input(value)
+            else:
+                result[key] = value  # Keep as is for non-str/dict types
+
+        return result
 
     def _build_entrypoints(self, data: list) -> list:
         """Build list of Entrypoint objects from list."""

@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import logging
 
@@ -69,20 +69,18 @@ class RaceCoordinator:
         # Initialize execution context
         import os
 
-        self.context = ExecutionContext(argv=cli_args or {}, env=dict(os.environ))
+        self.context = ExecutionContext(argv=cli_args or {}, env=dict(os.environ), config = asdict(self.config))
 
         # Initialize components
         self.template_engine = TemplateEngine()
         self.http_client = HTTPClient(self.config.config)
         self.http_parser = HTTPParser()
-        # self.extractors = extractor.JsonExtractor()
         self.engine = TemplateEngine()
 
         # Initialize state executor
         self.executor = StateExecutor(
             self.http_client,
             self.template_engine,
-            # self.extractor
         )
 
         # Set self as race coordinator in executor
@@ -91,13 +89,22 @@ class RaceCoordinator:
         # Initialize state machine
         self.machine = StateMachine(self.config, self.context, self.executor)
 
+        context_input = self.context.to_dict()
+        context_input["config"] = self.config.config
+
+        base_url: str = self.engine.render(
+            self.http_client.base_url,
+            context_input,
+            self.context,
+        )
+
         logger.info(f"\n{'='*70}")
         logger.info(f"Treco - Race Condition PoC Framework")
         logger.info(f"{'='*70}")
         logger.info(f"Attack: {self.config.metadata.name}")
         logger.info(f"Version: {self.config.metadata.version}")
         logger.info(f"Vulnerability: {self.config.metadata.vulnerability}")
-        logger.info(f"Target: {self.http_client.base_url}")
+        logger.info(f"Target: {base_url}")
         logger.info(f"{'='*70}\n")
 
     def run(self) -> List:
@@ -186,10 +193,16 @@ class RaceCoordinator:
 
                 # Log state entry
                 if state.logger.on_thread_enter:
-                    render_context = context.to_dict()
-                    render_context["thread"] = thread_info
 
-                    logger_output = self.engine.render(state.logger.on_thread_enter, render_context)
+                    context_input = self.context.to_dict()
+                    context_input["config"] = self.config.config
+                    context_input["thread"] = thread_info
+
+                    logger_output = self.engine.render(
+                        state.logger.on_thread_enter,
+                        context_input,
+                        self.context,
+                    )
 
                     for line in logger_output.splitlines():
                         logger.info(f"{line}")
@@ -258,12 +271,19 @@ class RaceCoordinator:
 
                 # Log thread leave
                 if state.logger.on_thread_leave:
-                    render_context = context.to_dict()
-                    render_context["thread"] = {"id": thread_id, "count": num_threads}
-                    render_context["response"] = response
-                    render_context["timing_ms"] = timing_ns / 1_000_000
+                    context_input = self.context.to_dict()
+                    context_input.update({
+                        "config": self.config.config,
+                        "thread": thread_info,
+                        "response": response,
+                        "timing_ms": timing_ns / 1_000_000
+                    })
 
-                    logger_output = self.engine.render(state.logger.on_thread_leave, render_context)
+                    logger_output = self.engine.render(
+                        state.logger.on_thread_leave,
+                        context_input,
+                        self.context,
+                    )
 
                     for line in logger_output.splitlines():
                         logger.info(f"{line}")

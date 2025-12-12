@@ -84,13 +84,28 @@ class StateMachine:
             self.current_state = state_name
             self.history.append(state_name)
 
+            context_input = self.context.to_dict()
+            context_input["config"] = self.config.config
+
+            state_description: str = self.engine.render(
+                state.description,
+                context_input,
+                self.context,
+            )
+
             logger.info(f"\n[StateMachine] Executing state: {state_name}")
-            logger.info(f"[StateMachine] Description: {state.description}")
+            logger.info(f"[StateMachine] Description: {state_description}")
 
             if state.logger.on_state_enter:
+                context_input = self.context.to_dict()
+                context_input["config"] = self.config.config
+
                 logger_output = self.engine.render(
-                    state.logger.on_state_enter, self.context.to_dict()
+                    state.logger.on_state_enter,
+                    context_input,
+                    self.context,
                 )
+
                 for line in logger_output.splitlines():
                     logger.info(f"{line}")
 
@@ -99,10 +114,15 @@ class StateMachine:
             results.append(result)
 
             if state.logger.on_state_leave:
+                context_input = self.context.to_dict()
+                context_input["config"] = self.config.config
+
                 logger_output = self.engine.render(
                     state.logger.on_state_leave,
-                    self.context.to_dict(),
+                    context_input,
+                    self.context,
                 )
+
                 for line in logger_output.splitlines():
                     logger.info(f"{line}")
 
