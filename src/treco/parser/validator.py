@@ -6,6 +6,8 @@ Validates YAML structure, required fields, and references.
 
 from typing import Dict, Any, Set
 
+from treco.http.extractor import get_extractor, ExtractorRegistry
+
 
 class ConfigValidator:
     """
@@ -233,13 +235,10 @@ class ConfigValidator:
                 )
 
             # Validate pattern_type
-            from treco.http.extractor import EXTRACTOR_REGISTRY
+            pattern_type = pattern.get("type", "regex")
 
-            valid_types = EXTRACTOR_REGISTRY.keys()
-
-            pattern_type = pattern["type"]
-            if pattern_type not in valid_types:
+            if not get_extractor(pattern_type):
                 raise ValueError(
                     f"State '{state_name}' extractor for variable '{var_name}' "
-                    f"has invalid pattern type: {pattern_type}. Valid types: {", ".join(list(valid_types))}"
+                    f"has invalid pattern type: {pattern_type}. Valid types: {", ".join(list(ExtractorRegistry.get_registered_types()))}"
                 )

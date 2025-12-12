@@ -1,12 +1,24 @@
-from typing import Any, Optional, List
-import json
+"""
+JSONPath extractor module.
+
+Extracts data from JSON responses using JSONPath expressions.
+"""
+
+from typing import Any, Optional
 from jsonpath_ng import parse
-from treco.http.extractor.base import BaseExtractor
 import requests
 
+from treco.http.extractor.base import BaseExtractor, register_extractor
 
+
+@register_extractor('jpath', aliases=['jsonpath', 'json_path'])
 class JPathExtractor(BaseExtractor):
-    """Extractor implementation using JSONPath (JPath)."""
+    """
+    Extractor implementation using JSONPath (JPath).
+    
+    Supports JSONPath expressions to extract data from JSON responses.
+    Registered as 'jpath' with aliases 'jsonpath' and 'json_path'.
+    """
 
     def extract(self, response: requests.Response, pattern: str) -> Optional[Any]:
         """
