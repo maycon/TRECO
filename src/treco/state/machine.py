@@ -107,7 +107,7 @@ class StateMachine:
                 )
 
                 for line in logger_output.splitlines():
-                    logger.info(f"{line}")
+                    logger.info(f"[{state_name}:on_state_enter] {line}")
 
             # Execute state
             result = self.executor.execute(state, self.context)
@@ -124,7 +124,7 @@ class StateMachine:
                 )
 
                 for line in logger_output.splitlines():
-                    logger.info(f"{line}")
+                    logger.info(f"[{state_name}:on_state_leave] {line}")
 
             # Determine next state based on result
             next_state = self._get_next_state(state, result)
