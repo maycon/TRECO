@@ -116,7 +116,7 @@ class PreconnectStrategy(ConnectionStrategy):
                 session = self._create_session_with_socket(sock)
                 self.sessions.append(session)
                 
-                logger.debug(f"[Thread {i}] Socket pre-connected")
+                logger.info(f"[Thread {i}] Socket pre-connected")
                 
             except Exception as e:
                 logger.error(f"[Thread {i}] Pre-connect failed: {e}")
@@ -189,5 +189,5 @@ class PreconnectStrategy(ConnectionStrategy):
                 pass
         self.sockets.clear()
         self.sessions.clear()
-        
+
         logger.info("[PreconnectStrategy] Cleanup complete")
