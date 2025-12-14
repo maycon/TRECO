@@ -119,6 +119,7 @@ class HTTPClient:
             url = url,
             headers = headers,
             allow_redirects = self.config.http.follow_redirects,
+            verify=self.config.tls.verify_cert,
             data = body,
             timeout = 30,
         )
