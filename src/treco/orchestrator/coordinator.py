@@ -90,7 +90,7 @@ class RaceCoordinator:
         self.machine = StateMachine(self.config, self.context, self.executor)
 
         context_input = self.context.to_dict()
-        context_input["config"] = self.config.config
+        context_input["config"] = self.http_client.config
 
         base_url: str = self.engine.render(
             self.http_client.base_url,
@@ -195,7 +195,7 @@ class RaceCoordinator:
                 if state.logger.on_thread_enter:
 
                     context_input = self.context.to_dict()
-                    context_input["config"] = self.config.config
+                    context_input["config"] = self.http_client.config
                     context_input["thread"] = thread_info
 
                     logger_output = self.engine.render(
@@ -205,7 +205,7 @@ class RaceCoordinator:
                     )
 
                     for line in logger_output.splitlines():
-                        logger.info(f"{line}")
+                        logger.info(f"[{state.name}:on_thread_enter] {line}")
 
                 # Get session for this thread
                 session = conn_strategy.get_session(thread_id)
@@ -230,7 +230,13 @@ class RaceCoordinator:
 
                 # Send request
                 response = session.request(
-                    method=method, url=url, headers=headers, data=body, timeout=30
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    data=body,
+                    timeout=30,
+                    allow_redirects = self.http_client.config.http.follow_redirects,
+                    verify=self.http_client.config.tls.verify_cert,
                 )
 
                 end_time_ns = time.perf_counter_ns()
@@ -273,7 +279,7 @@ class RaceCoordinator:
                 if state.logger.on_thread_leave:
                     context_input = self.context.to_dict()
                     context_input.update({
-                        "config": self.config.config,
+                        "config": self.http_client.config,
                         "thread": thread_info,
                         "response": response,
                         "timing_ms": timing_ns / 1_000_000
@@ -286,7 +292,7 @@ class RaceCoordinator:
                     )
 
                     for line in logger_output.splitlines():
-                        logger.info(f"{line}")
+                        logger.info(f"[{state.name}:on_thread_leave] {line}")
 
             except Exception as e:
                 # Store error result
@@ -331,16 +337,6 @@ class RaceCoordinator:
                 if result.status == 200 and result.extracted:
                     context.update(result.extracted)
                     break
-
-        # # Handle thread propagation based on configuration
-        # if race_config.thread_propagation == "single":
-        #     self._handle_single_propagation(state, race_results, context)
-        # elif race_config.thread_propagation == "parallel":
-        #     self._handle_parallel_propagation(state, race_results, context)
-        # else:
-        #     logger.warning(f"Unknown thread_propagation: {race_config.thread_propagation}, "
-        #                  f"defaulting to 'single'")
-        #     self._handle_single_propagation(state, race_results, context)
 
         # Return aggregated result
         successful_count = sum(1 for r in race_results if r.status == 200)
