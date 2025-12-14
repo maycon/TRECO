@@ -242,7 +242,6 @@ class RaceCoordinator:
                 extracted = extractor.extract_all(response, state.extract)
 
                 # Update context with extracted data
-                context.set_list_item(state.name, thread_id, extracted)
                 context.set_list_item(
                     state.name,
                     thread_id,
@@ -250,6 +249,7 @@ class RaceCoordinator:
                         "thread": thread_info,
                         "status": response.status_code,
                         "timing_ms": timing_ns / 1_000_000,
+                        **extracted
                     },
                 )
 
