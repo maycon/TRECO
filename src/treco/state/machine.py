@@ -222,12 +222,6 @@ class StateMachine:
         if transition:
             return transition.goto
 
-        # No matching transition found
-        # Check if there's a default transition (on_status: 0)
-        for trans in state.next:
-            if trans.on_status == 0:
-                return trans.goto
-
         # No transition available, go to error state
         logger.warning(
             f"[StateMachine] WARNING: No transition for status {result.status}, going to error"

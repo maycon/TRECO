@@ -197,7 +197,7 @@ class YAMLLoader:
         # Build transitions
         transitions = []
         for trans in data.get("next", []):
-            status = trans.get("on_status", 200)
+            status = trans.get("on_status", 0)
             status = [status] if isinstance(status, int) else status
 
             transitions.append(
