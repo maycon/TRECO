@@ -145,7 +145,7 @@ class StateExecutor:
                 state_name=state.name,
                 status=response.status_code,
                 extracted=extracted,
-                raw_response=response.text[:500],  # Truncate for logging
+                raw_response=response.text,
             )
 
         except Exception as e:

@@ -110,6 +110,7 @@ class StateMachine:
                 user_output(f">> {state_name}")
                 for line in logger_output.splitlines():
                     user_output(f"  {line}")
+                user_output("")
 
             # Execute state
             result = self.executor.execute(state, self.context)
@@ -118,6 +119,7 @@ class StateMachine:
             if state.logger.on_state_leave:
                 context_input = self.context.to_dict()
                 context_input["config"] = self.config.config
+                context_input["response"] = asdict(result)
 
                 logger_output = self.engine.render(
                     state.logger.on_state_leave,
@@ -127,6 +129,7 @@ class StateMachine:
                 user_output(f"<< {state_name}")
                 for line in logger_output.splitlines():
                     user_output(f"  {line}")
+                user_output("")
 
             # Determine next state based on result
             next_state = self._get_next_state(state, result)

@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 from typing import List, Dict, Any, Optional
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 import logging
 
@@ -24,6 +24,59 @@ from treco.http import HTTPClient, HTTPParser, extractor
 from treco.state import StateMachine, StateExecutor
 from treco.sync import create_sync_mechanism
 from treco.connection import create_connection_strategy
+
+
+class HttpxResponseAdapter:
+    """
+    Adapter to make httpx.Response compatible with requests.Response interface.
+    
+    This allows existing extractors and template code to work with httpx responses
+    without modification.
+    
+    Attributes:
+        status_code: HTTP status code
+        text: Response body as text
+        content: Response body as bytes
+        headers: Response headers (dict-like)
+        cookies: Response cookies
+        url: Request URL
+    """
+    
+    def __init__(self, httpx_response):
+        """
+        Create adapter from httpx.Response.
+        
+        Args:
+            httpx_response: httpx.Response object
+        """
+        self._response = httpx_response
+        
+        # Direct mappings (same interface)
+        self.status_code = httpx_response.status_code
+        self.text = httpx_response.text
+        self.content = httpx_response.content
+        self.headers = dict(httpx_response.headers)
+        self.url = str(httpx_response.url)
+        
+        # Cookies need conversion
+        self.cookies = {name: value for name, value in httpx_response.cookies.items()}
+    
+    def json(self) -> Any:
+        """Parse response body as JSON."""
+        return self._response.json()
+    
+    @property
+    def ok(self) -> bool:
+        """Check if response was successful (2xx)."""
+        return 200 <= self.status_code < 300
+    
+    @property
+    def reason(self) -> str:
+        """HTTP reason phrase."""
+        return self._response.reason_phrase
+    
+    def __repr__(self) -> str:
+        return f"<HttpxResponseAdapter [{self.status_code}]>"
 
 
 @dataclass
@@ -76,12 +129,14 @@ class RaceCoordinator:
         self.template_engine = TemplateEngine()
         self.http_client = HTTPClient(self.config.config)
         self.http_parser = HTTPParser()
+        # self.extractors = extractor.JsonExtractor()
         self.engine = TemplateEngine()
 
         # Initialize state executor
         self.executor = StateExecutor(
             self.http_client,
             self.template_engine,
+            # self.extractor
         )
 
         # Set self as race coordinator in executor
@@ -90,22 +145,13 @@ class RaceCoordinator:
         # Initialize state machine
         self.machine = StateMachine(self.config, self.context, self.executor)
 
-        context_input = self.context.to_dict()
-        context_input["config"] = self.http_client.config
-
-        base_url: str = self.engine.render(
-            self.http_client.base_url,
-            context_input,
-            self.context,
-        )
-
         logger.info(f"\n{'='*70}")
         logger.info(f"Treco - Race Condition PoC Framework")
         logger.info(f"{'='*70}")
         logger.info(f"Attack: {self.config.metadata.name}")
         logger.info(f"Version: {self.config.metadata.version}")
         logger.info(f"Vulnerability: {self.config.metadata.vulnerability}")
-        logger.info(f"Target: {base_url}")
+        logger.info(f"Target: {self.http_client.base_url}")
         logger.info(f"{'='*70}\n")
 
     def run(self) -> List:
@@ -173,13 +219,21 @@ class RaceCoordinator:
         logger.info(f"Thread Propagation: {race_config.thread_propagation}")
         logger.info(f"{'='*70}\n")
 
-        # Create sync mechanism
-        sync = create_sync_mechanism(race_config.sync_mechanism)
-        sync.prepare(num_threads)
+        # Create sync mechanisms:
+        # 1. conn_sync: Ensures all threads have established connections before proceeding
+        # 2. race_sync: Synchronizes the actual race (all threads send simultaneously)
+        conn_sync = create_sync_mechanism("barrier")
+        race_sync = create_sync_mechanism(race_config.sync_mechanism)
 
-        # Create connection strategy
-        conn_strategy = create_connection_strategy(race_config.connection_strategy)
+        # Create connection strategy with connection sync
+        conn_strategy = create_connection_strategy(
+            race_config.connection_strategy,
+            sync=conn_sync
+        )
+        
+        # Prepare strategies
         conn_strategy.prepare(num_threads, self.http_client)
+        race_sync.prepare(num_threads)
 
         # Shared results list (thread-safe with lock)
         race_results: List[RaceResult] = []
@@ -191,8 +245,9 @@ class RaceCoordinator:
             thread_info = {"id": thread_id, "count": num_threads}
 
             try:
-
-                # Log state entry
+                # ════════════════════════════════════════════════════════════
+                # PHASE 1: LOG THREAD ENTRY (optional)
+                # ════════════════════════════════════════════════════════════
                 if state.logger.on_thread_enter:
 
                     context_input = self.context.to_dict()
@@ -208,37 +263,51 @@ class RaceCoordinator:
                     for line in logger_output.splitlines():
                         user_output(f">> {state.name} T:{thread_id:02} {line}")
 
-                # Get session for this thread
-                session = conn_strategy.get_session(thread_id)
-
-                # Render HTTP request template
+                # ════════════════════════════════════════════════════════════
+                # PHASE 2: PREPARE REQUEST (before connect, can be serialized)
+                # Render template and parse HTTP - this can be slow due to GIL
+                # but it doesn't matter because we haven't connected yet
+                # ════════════════════════════════════════════════════════════
                 context_input = context.to_dict()
                 context_input["config"] = self.http_client.config
                 context_input["thread"] = {"id": thread_id, "count": num_threads}
 
                 http_text = self.template_engine.render(state.request, context_input, context)
-
-                # Parse HTTP request
                 method, path, headers, body = self.http_parser.parse(http_text)
-                url = self.http_client.base_url + path
 
-                # Wait at synchronization point
-                logger.info(f"[Thread {thread_id}] Ready, waiting at sync point...")
-                sync.wait(thread_id)
+                # ════════════════════════════════════════════════════════════
+                # PHASE 3: CONNECT (parallel with internal barrier)
+                # All threads establish connections simultaneously, then wait
+                # at conn_sync barrier until everyone is connected
+                # ════════════════════════════════════════════════════════════
+                conn_strategy.connect(thread_id)
+                client = conn_strategy.get_session(thread_id)
 
-                # === RACE WINDOW STARTS HERE ===
+                # Build the prepared request (doesn't send yet)
+                # This prepares all headers, encodes body, resolves URL
+                request = client.build_request(
+                    method=method,
+                    url=path,  # base_url is already set in the client
+                    headers=headers,
+                    content=body if body else None,
+                )
+
+                # ════════════════════════════════════════════════════════════
+                # PHASE 4: RACE SYNC (all threads ready, minimal gap)
+                # At this point: connection established, request prepared
+                # Only thing left is to send bytes over the wire
+                # ════════════════════════════════════════════════════════════
+                logger.debug(f"[Thread {thread_id}] Ready, waiting at race sync point...")
+                race_sync.wait(thread_id)
+
+                # ════════════════════════════════════════════════════════════
+                # PHASE 5: RACE WINDOW - SEND ONLY
+                # This is the critical section - only network I/O happens here
+                # All preparation is done, just send the prepared request
+                # ════════════════════════════════════════════════════════════
                 start_time_ns = time.perf_counter_ns()
 
-                # Send request
-                response = session.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    data=body,
-                    timeout=30,
-                    allow_redirects = self.http_client.config.http.follow_redirects,
-                    verify=self.http_client.config.tls.verify_cert,
-                )
+                response = client.send(request)
 
                 end_time_ns = time.perf_counter_ns()
                 # === RACE WINDOW ENDS HERE ===

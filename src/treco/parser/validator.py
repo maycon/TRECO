@@ -26,7 +26,7 @@ class ConfigValidator:
     """
 
     VALID_SYNC_MECHANISMS = {"barrier", "countdown_latch", "semaphore"}
-    VALID_CONNECTION_STRATEGIES = {"preconnect", "lazy", "pooled"}
+    VALID_CONNECTION_STRATEGIES = {"preconnect", "lazy", "pooled", "multiplexed"}
     VALID_THREAD_PROPAGATIONS = {"single", "parallel"}
 
     def validate(self, data: Dict[str, Any]) -> None:
