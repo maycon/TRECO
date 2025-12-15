@@ -14,6 +14,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from treco.logging import user_output
 from treco.models.config import RaceConfig
 
 from treco.models import Config, State, ExecutionContext
@@ -205,7 +206,7 @@ class RaceCoordinator:
                     )
 
                     for line in logger_output.splitlines():
-                        logger.info(f"[{state.name}:on_thread_enter] {line}")
+                        user_output(f">> {state.name} T:{thread_id:02} {line}")
 
                 # Get session for this thread
                 session = conn_strategy.get_session(thread_id)
@@ -292,7 +293,7 @@ class RaceCoordinator:
                     )
 
                     for line in logger_output.splitlines():
-                        logger.info(f"[{state.name}:on_thread_leave] {line}")
+                        user_output(f"<< {state.name} T:{thread_id:02} {line}")
 
             except Exception as e:
                 # Store error result

@@ -12,6 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from treco.logging import user_output
 from treco.template import engine
 
 from treco.models import Config, State, ExecutionContext
@@ -106,8 +107,9 @@ class StateMachine:
                     self.context,
                 )
 
+                user_output(f">> {state_name}")
                 for line in logger_output.splitlines():
-                    logger.info(f"[{state_name}:on_state_enter] {line}")
+                    user_output(f"  {line}")
 
             # Execute state
             result = self.executor.execute(state, self.context)
@@ -122,9 +124,9 @@ class StateMachine:
                     context_input,
                     self.context,
                 )
-
+                user_output(f"<< {state_name}")
                 for line in logger_output.splitlines():
-                    logger.info(f"[{state_name}:on_state_leave] {line}")
+                    user_output(f"  {line}")
 
             # Determine next state based on result
             next_state = self._get_next_state(state, result)
