@@ -25,9 +25,16 @@ Example:
     results = coordinator.run()
 """
 
+
 __version__ = "1.0.0"
 __author__ = "Hack N' Roll Security Team"
 
 from .orchestrator import RaceCoordinator
+from .logging import setup_logging, get_logger, user_output
 
-__all__ = ["RaceCoordinator"]
+__all__ = [
+    "RaceCoordinator",
+    "setup_logging",
+    "get_logger",
+    "user_output",
+]
