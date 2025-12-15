@@ -28,8 +28,6 @@ import requests
 from treco.models.config import ExtractPattern
 from treco.http.extractor.base import BaseExtractor, ExtractorRegistry, UnknownExtractorError, register_extractor
 
-
-
 def get_extractor(pattern_type: str) -> BaseExtractor:
     """
     Return an extractor instance for the given pattern type.
@@ -47,7 +45,7 @@ def get_extractor(pattern_type: str) -> BaseExtractor:
 
 
 def extract_all(
-    response: requests.Response, extracts: Dict[str, ExtractPattern]
+    response: "HttpxResponseAdapter", extracts: Dict[str, ExtractPattern]
 ) -> Dict[str, Optional[str]]:
     """
     Run all patterns in `extracts` against `response`.
