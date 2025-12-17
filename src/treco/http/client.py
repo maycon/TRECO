@@ -82,6 +82,7 @@ class HTTPClient:
             timeout=timeout,
             limits=limits,
             follow_redirects=self.config.http.follow_redirects,
+            proxy=self.config.proxy.to_client_proxy() if self.config.proxy else None,
         )
 
         return client
