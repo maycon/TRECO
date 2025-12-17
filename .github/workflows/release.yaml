@@ -1,13 +1,12 @@
 # =============================================================================
-# Release Workflow - Semantic Versioning & PyPI Publish
+# Release Workflow
 # =============================================================================
 #
 # Required Secret: PYPI_TOKEN
 #
-# Commit format:
-#   feat: description  → Minor (1.0.0 → 1.1.0)
-#   fix: description   → Patch (1.0.0 → 1.0.1)
-#   feat!: description → Major (1.0.0 → 2.0.0)
+# Triggers:
+#   - Push to main with feat:/fix: commits (auto bump)
+#   - Manual trigger with version input (manual release)
 
 name: Release
 
@@ -15,6 +14,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.1.0) - leave empty for auto'
+        required: false
+        type: string
 
 concurrency:
   group: release
@@ -43,61 +47,88 @@ jobs:
       - name: Install dependencies
         run: pip install python-semantic-release build
 
-      - name: Get current version
-        id: current
-        run: |
-          VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $VERSION"
-
-      - name: Semantic Release
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
+          echo "Current version: $CURRENT"
           
-          # Run semantic-release (updates files)
-          semantic-release version --no-push --no-vcs-release 2>&1 | tee sr_output.txt || true
-          
-          # Get new version from pyproject.toml
-          NEW_VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
-          echo "New version: $NEW_VERSION"
-          
-          # Compare versions
-          if [ "$NEW_VERSION" != "${{ steps.current.outputs.version }}" ]; then
-            echo "✅ Version bumped: ${{ steps.current.outputs.version }} → $NEW_VERSION"
-            echo "released=true" >> $GITHUB_OUTPUT
-            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-            
-            # Commit, tag and push
-            git add -A
-            git commit -m "chore(release): v$NEW_VERSION [skip ci]"
-            git tag "v$NEW_VERSION"
-            git push origin main --tags
+          # Manual version input takes priority
+          if [ -n "${{ inputs.version }}" ]; then
+            NEW_VERSION="${{ inputs.version }}"
+            echo "Manual version: $NEW_VERSION"
           else
-            echo "❌ No version change"
-            echo "released=false" >> $GITHUB_OUTPUT
+            # Try semantic-release
+            NEW_VERSION=$(semantic-release version --print 2>/dev/null || echo "")
+            echo "Semantic-release suggests: $NEW_VERSION"
+          fi
+          
+          # Check if we should release
+          if [ -z "$NEW_VERSION" ] || [ "$NEW_VERSION" = "$CURRENT" ]; then
+            # Check if tag exists for current version
+            if git rev-parse "v$CURRENT" >/dev/null 2>&1; then
+              echo "Tag v$CURRENT exists, no new version"
+              echo "release=false" >> $GITHUB_OUTPUT
+            else
+              echo "Tag v$CURRENT doesn't exist, releasing current version"
+              echo "release=true" >> $GITHUB_OUTPUT
+              echo "version=$CURRENT" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "New version: $NEW_VERSION"
+            echo "release=true" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           fi
 
+      - name: Update version in files
+        if: steps.version.outputs.release == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          
+          # Update pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          
+          # Update __init__.py  
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/treco/__init__.py
+          
+          echo "=== Updated versions ==="
+          grep 'version = ' pyproject.toml | head -1
+          grep '__version__' src/treco/__init__.py
+
       - name: Build
-        if: steps.release.outputs.released == 'true'
+        if: steps.version.outputs.release == 'true'
         run: |
           python -m build
           ls -la dist/
 
+      - name: Commit and Tag
+        if: steps.version.outputs.release == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          
+          git add -A
+          git diff --staged --quiet || git commit -m "chore(release): v$VERSION [skip ci]"
+          git tag "v$VERSION" || echo "Tag already exists"
+          git push origin main --tags
+
       - name: GitHub Release
-        if: steps.release.outputs.released == 'true'
+        if: steps.version.outputs.release == 'true'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.release.outputs.version }}
-          name: v${{ steps.release.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: TRECO v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: dist/*
 
       - name: Publish to PyPI
-        if: steps.release.outputs.released == 'true'
+        if: steps.version.outputs.release == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_TOKEN }}
