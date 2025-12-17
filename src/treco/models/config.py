@@ -51,6 +51,46 @@ class HTTPConfig:
 
     follow_redirects: bool = True
 
+@dataclass
+class ProxyAuth:
+    """
+    Proxy authentication configuration.
+
+    Attributes:
+        username: Proxy username
+        password: Proxy password
+    """
+
+    username: str
+    password: str
+
+@dataclass
+class ProxyConfig:
+    """
+    Proxy server configuration.
+
+    Attributes:
+        host: Proxy hostname or IP address
+        port: Proxy port number
+        type: Proxy type (http, https, socks5)
+        auth: Optional proxy authentication
+    """
+    host: Optional[str] = None
+    port: Optional[int] = None
+    type: str = "http"
+    auth: Optional[ProxyAuth] = None
+
+    def to_client_proxy(self) -> Optional[str]:
+        """Convert proxy configuration to dictionary format for HTTP clients."""
+        if not self.host or not self.port:
+            return None
+        
+        if self.auth:
+            proxy_url = f"{self.type}://{self.auth.username}:{self.auth.password}@{self.host}:{self.port}"
+        else:
+            proxy_url = f"{self.type}://{self.host}:{self.port}"
+            
+        return proxy_url
 
 @dataclass
 class ServerConfig:
@@ -72,6 +112,7 @@ class ServerConfig:
     reuse_connection: bool = False
     tls: TLSConfig = field(default_factory=TLSConfig)
     http: HTTPConfig = field(default_factory=HTTPConfig)
+    proxy: Optional[ProxyConfig] = None
 
 
 @dataclass

@@ -6,11 +6,11 @@ Loads YAML files and converts them into typed Config objects.
 
 import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import logging
 
-from treco.models.config import ExtractPattern, HTTPConfig
+from treco.models.config import ExtractPattern, HTTPConfig, ProxyAuth, ProxyConfig
 from treco.template.engine import TemplateEngine
 
 logger = logging.getLogger(__name__)
@@ -118,13 +118,28 @@ class YAMLLoader:
             follow_redirects=http_data.get("follow_redirects", True)
         )
 
+        proxy_data = data.get("proxy", None)
+        proxy_config: Optional[ProxyConfig] = None
+        if proxy_data:
+            proxy_config = ProxyConfig(
+                host = proxy_data.get("host", None),
+                port = proxy_data.get("port", None),
+                type = proxy_data.get("type", "http"),
+ 
+                auth=ProxyAuth(
+                    username=self.engine.render(proxy_data["auth"]["username"], {}),
+                    password=self.engine.render(proxy_data["auth"]["password"], {}),
+                ) if "auth" in proxy_data else None
+            )
+
         return ServerConfig(
             host=self.engine.render(data["host"], {}),
             port=data["port"],
             threads=data.get("threads", 20),
             reuse_connection=data.get("reuse_connection", False),
             tls=tls_config,
-            http=http_config
+            http=http_config,
+            proxy=proxy_config,
         )
 
     def _build_entrypoints_input(self, data: Dict[str, Any]) -> Dict[str, Any]:

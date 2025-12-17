@@ -11,6 +11,8 @@ from typing import Dict, Optional
 
 import httpx
 
+from treco.models.config import ProxyConfig
+
 from ..sync.base import SyncMechanism
 from .base import ConnectionStrategy
 
@@ -60,6 +62,7 @@ class PreconnectStrategy(ConnectionStrategy):
         # Connection configuration (set in _prepare)
         self._base_url: str = ""
         self._host: str = ""
+        self._proxy = None
         self._port: int = 443
         self._verify_cert: bool = True
         self._use_http2: bool = http2
@@ -79,6 +82,7 @@ class PreconnectStrategy(ConnectionStrategy):
         
         self._host = config.host
         self._port = config.port
+        self._proxy: Optional[ProxyConfig] = config.proxy
         self._base_url = f"{scheme}://{config.host}:{config.port}"
         self._verify_cert = config.tls.verify_cert
         self._follow_redirects = config.http.follow_redirects
@@ -121,6 +125,7 @@ class PreconnectStrategy(ConnectionStrategy):
                 base_url=self._base_url,
                 follow_redirects=self._follow_redirects,
                 limits=limits,
+                proxy=self._proxy.to_client_proxy() if self._proxy else None,
             )
             
             # Force TCP/TLS connection establishment
