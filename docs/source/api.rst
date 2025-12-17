@@ -241,7 +241,7 @@ Base class for all extractors.
            Extract data from HTTP response.
            
            Args:
-               response: requests.Response object
+               response: ResponseProtocol object
                pattern: Extraction pattern
            
            Returns:

@@ -433,7 +433,7 @@ You can create custom extractors by implementing the ``BaseExtractor`` interface
            Extract data from response.
            
            Args:
-               response: requests.Response object
+               response: ResponseProtocol object
                pattern: Extraction pattern string
            
            Returns:
