@@ -54,13 +54,15 @@ TRECO addresses these challenges through:
 
 * Race windows consistently below 1 microsecond
 * Pre-established connections eliminate TCP/TLS handshake overhead
+* HTTP/2 multiplexed connections for even tighter race windows
 * Barrier synchronization ensures simultaneous request dispatch
 * High-resolution timing measurements for analysis
 
 **True Parallel Execution**
 
-* Built specifically for Python 3.14t (free-threaded build)
-* No Global Interpreter Lock (GIL) constraints
+* Supports Python 3.10+ with full functionality
+* Optimized for Python 3.14t (free-threaded build)
+* No Global Interpreter Lock (GIL) constraints with Python 3.14t
 * Multiple threads execute truly in parallel
 * Better CPU utilization for concurrent operations
 
@@ -73,8 +75,9 @@ TRECO addresses these challenges through:
 **Connection Strategies**
 
 * **Preconnect**: Establish TCP/TLS connections before synchronization point
+* **Multiplexed**: Single HTTP/2 connection shared by all threads (tightest race window)
 * **Lazy**: Connect on-demand (higher latency)
-* **Pooled**: Reuse connection pool (not ideal for race testing)
+* **Pooled**: Reuse connection pool
 
 **State Machine Architecture**
 
@@ -99,14 +102,17 @@ Core Capabilities
 ⚡ **Precision Timing**
    Sub-microsecond race window (< 1μs) through pre-connection and barrier synchronization
 
-🔓 **GIL-Free Architecture**
-   Python 3.14t free-threaded build for true parallel execution without GIL contention
+🔓 **GIL-Free Ready**
+   Python 3.14t free-threaded build support for true parallel execution without GIL contention
+
+🌐 **HTTP/2 Support**
+   Multiplexed connections via httpx for tighter race windows
 
 🔄 **Multiple Sync Mechanisms**
    Barrier, countdown latch, and semaphore patterns for different attack scenarios
 
-🌐 **Full HTTP/HTTPS Support**
-   HTTP/1.1 with complete TLS configuration and certificate validation options
+🔌 **Four Connection Strategies**
+   Preconnect, multiplexed, lazy, and pooled for different scenarios
 
 🎨 **Powerful Template Engine**
    Jinja2-based with custom filters for TOTP, hashing, environment variables, and CLI arguments
@@ -114,8 +120,11 @@ Core Capabilities
 📊 **Automatic Analysis**
    Race window calculation, vulnerability detection, and detailed statistics reporting
 
-🔌 **Extensible Design**
+🔧 **Extensible Design**
    Plugin-based extractors (regex, JSONPath, XPath, boundary, header, cookie) and custom connection strategies
+
+🌍 **Proxy Support**
+   HTTP, HTTPS, and SOCKS5 proxy configuration
 
 Advanced Features
 ~~~~~~~~~~~~~~~~~
@@ -180,10 +189,11 @@ Components
 
 **HTTP Client**
 
-* Handles HTTP/HTTPS communication
+* Handles HTTP/1.1 and HTTP/2 communication
+* Uses httpx for modern async HTTP support
 * Manages connection lifecycle
 * Pre-connection strategy implementation
-* TLS/SSL configuration
+* TLS/SSL and proxy configuration
 
 **Template Engine**
 
@@ -353,17 +363,15 @@ Limitations
 
 **Current Limitations**
 
-* HTTP/1.1 only (no HTTP/2 or HTTP/3 yet)
 * Single host per configuration
 * Limited to API-based attacks
-* Requires Python 3.14t
 
 Requirements
 ------------
 
 **Software**
 
-* Python 3.14t (free-threaded build)
+* Python 3.10+ (Python 3.14t recommended for best performance)
 * uv package manager (recommended)
 * Linux, macOS, or Windows (WSL recommended)
 
@@ -384,7 +392,7 @@ Requirements
 Project Status
 --------------
 
-**Current Version**: 1.0.0
+**Current Version**: 1.2.0
 
 **Development Status**: Beta
 
@@ -460,6 +468,7 @@ TRECO was inspired by real-world security research and the need for precise race
 
 * The Python community for Python 3.14t free-threaded build
 * TREM project for initial inspiration
+* httpx developers for modern HTTP client
 * Security researchers who discovered and disclosed race condition vulnerabilities
 * Open source community for tools and libraries
 
@@ -492,5 +501,6 @@ If you use TRECO in academic research, please cite:
      title = {TRECO: Tactical Race Exploitation \& Concurrency Orchestrator},
      author = {Vitali, Maycon Maia},
      year = {2025},
-     url = {https://github.com/maycon/TRECO}
+     url = {https://github.com/maycon/TRECO},
+     version = {1.2.0}
    }

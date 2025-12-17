@@ -44,13 +44,12 @@ master_doc = 'index'
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+# html_static_path = ['_static']
 html_logo = '../../static/treco.png'
 html_favicon = '../../static/treco.png'
 
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'collapse_navigation': False,

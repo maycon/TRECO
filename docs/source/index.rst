@@ -4,15 +4,49 @@ TRECO Documentation
 .. image:: ../../static/treco.png
    :alt: TRECO Logo
    :align: center
-   :width: 200px
+   :width: 220px
 
-**Tactical Race Exploitation & Concurrency Orchestrator**
+.. raw:: html
 
-A specialized framework for identifying and exploiting race condition vulnerabilities in HTTP APIs.
+   <div align="center">
+   <h2>Tactical Race Exploitation & Concurrency Orchestrator</h2>
+   <p><em>A specialized framework for identifying and exploiting race condition vulnerabilities in HTTP APIs with sub-microsecond precision.</em></p>
+   </div>
+
+.. image:: https://img.shields.io/badge/python-3.14t-blue.svg
+   :target: https://www.python.org/downloads/
+   :alt: Python 3.14t
+
+.. image:: https://img.shields.io/badge/python-3.10%2B-blue.svg
+   :target: https://www.python.org/downloads/
+   :alt: Python 3.10+
+
+.. image:: https://img.shields.io/badge/License-MIT-yellow.svg
+   :target: https://opensource.org/licenses/MIT
+   :alt: License: MIT
+
+.. image:: https://img.shields.io/badge/GIL-Free-green.svg
+   :target: https://peps.python.org/pep-0703/
+   :alt: Free-Threaded
+
+----
+
+Welcome to TRECO
+----------------
+
+TRECO enables security researchers to orchestrate highly precise concurrent HTTP attacks with **sub-microsecond timing accuracy**, making it possible to reliably trigger race conditions in web applications. Built for both Python 3.10+ (with GIL) and Python 3.14t (GIL-free), TRECO achieves unprecedented timing precision for race condition exploitation.
+
+**Quick Links:**
+
+* :doc:`installation` - Get started in 5 minutes
+* :doc:`quickstart` - Your first race condition test
+* :doc:`examples` - Real-world attack scenarios
+* `GitHub Repository <https://github.com/maycon/TRECO>`_
 
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started
+   :hidden:
 
    about
    installation
@@ -21,61 +55,171 @@ A specialized framework for identifying and exploiting race condition vulnerabil
 .. toctree::
    :maxdepth: 2
    :caption: User Guide
+   :hidden:
 
    configuration
    extractors
    templates
+   synchronization
+   connection-strategies
    examples
 
 .. toctree::
    :maxdepth: 2
    :caption: Reference
+   :hidden:
 
    cli
    api
+   troubleshooting
+   best-practices
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Additional Resources
+   :hidden:
+
+   contributing
+   license
+
+----
 
 Overview
 --------
 
-TRECO enables security researchers to orchestrate highly precise concurrent HTTP attacks with sub-microsecond timing accuracy, making it possible to reliably trigger race conditions in web applications.
+TRECO is a specialized framework designed for **authorized security testing** of web applications, focusing on race condition vulnerabilities that are notoriously difficult to detect and exploit.
 
-**What makes TRECO unique:**
+What Makes TRECO Unique
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-* **Sub-microsecond precision**: Race windows consistently below 1μs through pre-connection and barrier synchronization
-* **True parallelism**: Python 3.14t free-threaded build eliminates GIL constraints for genuine concurrent execution
-* **State machine architecture**: Complex multi-state attack flows with conditional transitions
-* **Flexible synchronization**: Barrier, countdown latch, and semaphore patterns for different scenarios
-* **Production-grade analysis**: Automatic race window calculation, vulnerability detection, and detailed statistics
+**Sub-Microsecond Precision**
+   Race windows consistently below 1 microsecond through pre-connection and barrier synchronization, making it possible to reliably trigger even the most difficult race conditions.
+
+**True Parallelism**
+   Built specifically for Python 3.14t free-threaded build, eliminating GIL constraints for genuine concurrent execution. Also works with Python 3.10+ with good performance.
+
+**State Machine Architecture**
+   Complex multi-state attack flows with conditional transitions, allowing sophisticated testing scenarios that mirror real-world attack patterns.
+
+**Flexible Synchronization**
+   Barrier, countdown latch, and semaphore patterns for different attack scenarios, giving researchers precise control over thread coordination.
+
+**Production-Grade Analysis**
+   Automatic race window calculation, vulnerability detection, and detailed statistics to help identify and validate vulnerabilities.
+
+**Extensible Design**
+   Plugin-based architecture for extractors and connection strategies, making it easy to adapt TRECO to new testing scenarios.
+
+----
 
 Key Features
 ------------
 
-* ⚡ **Precision Timing**: Sub-microsecond race window (< 1μs)
-* 🔓 **GIL-Free**: Python 3.14t free-threaded build for true parallel execution
-* 🔄 **Flexible Sync**: Barrier, countdown latch, and semaphore mechanisms
-* 🌐 **HTTP/HTTPS**: Full HTTP/1.1 support with TLS configuration
-* 🎨 **Template Engine**: Jinja2-based with custom filters (TOTP, hashing, env vars)
-* 📊 **Analysis**: Automatic race window calculation and vulnerability detection
-* 🔌 **Extensible**: Plugin-based extractors and connection strategies
+Core Capabilities
+~~~~~~~~~~~~~~~~~
+
+⚡ **Precision Timing**
+   Sub-microsecond race window (< 1μs with Python 3.14t, ~10μs with Python 3.10+) through pre-connection and barrier synchronization
+
+🔓 **GIL-Free Option**
+   Python 3.14t free-threaded build for true parallel execution without GIL contention. Compatible with Python 3.10+ for broader accessibility.
+
+🔄 **Multiple Sync Mechanisms**
+   Barrier, countdown latch, and semaphore patterns for different attack scenarios and timing requirements
+
+🌐 **Full HTTP/HTTPS Support**
+   Complete HTTP/1.1 implementation with configurable TLS/SSL settings and certificate validation options
+
+🎨 **Powerful Template Engine**
+   Jinja2-based with custom filters for TOTP, hashing (MD5, SHA1, SHA256), environment variables, and CLI arguments
+
+📊 **Automatic Analysis**
+   Race window calculation, vulnerability detection, timing statistics, and success rate reporting
+
+🔌 **Extensible Architecture**
+   Plugin-based extractors (regex, JSONPath, XPath, boundary, header, cookie) and custom connection strategies
+
+Advanced Features
+~~~~~~~~~~~~~~~~~
+
+**State Machine Engine**
+
+* Multi-state attack flows with conditional transitions
+* Context preservation and variable sharing across states
+* Sequential and parallel execution modes
+* Thread propagation strategies (single/parallel)
+
+**Data Extraction**
+
+* JSONPath for JSON responses
+* XPath for XML/HTML responses
+* Regular expressions for custom patterns
+* Boundary extraction for delimiter-based data
+* Header extraction from HTTP response headers
+* Cookie extraction from Set-Cookie headers
+
+**Request Templates**
+
+* Dynamic HTTP request generation with Jinja2
+* Variable interpolation and substitution
+* Custom filters (totp, md5, sha1, sha256, env, argv, average)
+* Multi-line support with YAML pipe syntax
+* Conditional logic and loops
+
+**Logging & Reporting**
+
+* Per-state and per-thread logging
+* Detailed timing statistics (min, max, avg, race window)
+* Race window quality assessment
+* Vulnerability assessment and recommendations
+
+**Thread Management**
+
+* Configurable thread count (1-1000)
+* Thread propagation strategies
+* Thread-safe state management
+* Automatic resource cleanup
+
+----
 
 Common Vulnerabilities Tested
 ------------------------------
 
-* Double-spending attacks (payment processing)
-* Fund redemption exploits (financial applications)
-* Inventory manipulation (e-commerce)
-* Privilege escalation (authentication systems)
-* Rate limiting bypasses
+TRECO is designed to identify and exploit these common race condition vulnerabilities:
+
+💰 **Double-Spending Attacks**
+   Process the same payment or transaction multiple times due to race conditions in payment processing systems.
+
+🎁 **Fund Redemption Exploits**
+   Redeem gift cards, coupons, or promotional codes beyond their intended limit by exploiting concurrent redemption logic.
+
+📦 **Inventory Manipulation**
+   Purchase limited stock items beyond available quantity by racing inventory check and purchase operations.
+
+🔐 **Privilege Escalation**
+   Gain unauthorized access or elevated privileges through race conditions in authentication and authorization systems.
+
+⚡ **Rate Limiting Bypasses**
+   Exceed API quotas and rate limits by exploiting race conditions in rate limiting implementations.
+
+🎟️ **Voucher Abuse**
+   Reuse single-use vouchers or discount codes multiple times through concurrent usage.
+
+🏦 **TOCTOU Vulnerabilities**
+   Exploit Time-of-Check to Time-of-Use vulnerabilities in financial transactions, resource allocation, and access control.
+
+----
 
 Quick Example
 -------------
 
+Here's a simple example of a race condition test for a fund redemption vulnerability:
+
 .. code-block:: yaml
 
    metadata:
-     name: "Race Condition Test"
+     name: "Fund Redemption Race Condition"
      version: "1.0"
-     author: "Security Researcher"
      vulnerability: "CWE-362"
 
    config:
@@ -84,8 +228,15 @@ Quick Example
      tls:
        enabled: true
 
+   entrypoints:
+     - state: login
+       input:
+         username: "testuser"
+         password: "testpass"
+
    states:
      login:
+       description: "Authenticate and get token"
        request: |
          POST /api/login HTTP/1.1
          Host: {{ config.host }}
@@ -103,9 +254,11 @@ Quick Example
            goto: race_attack
 
      race_attack:
+       description: "Concurrent redemption attack"
        request: |
          POST /api/redeem HTTP/1.1
          Authorization: Bearer {{ login.token }}
+         Content-Type: application/json
          
          {"amount": 100}
        
@@ -118,120 +271,260 @@ Quick Example
          - on_status: 200
            goto: end
 
+     end:
+       description: "Attack complete"
+
+**Run the test:**
+
+.. code-block:: bash
+
+   treco attack.yaml
+
+**Expected output:**
+
+.. code-block:: text
+
+   ======================================================================
+   RACE ATTACK: race_attack
+   ======================================================================
+   Threads: 20
+   Sync Mechanism: barrier
+   Connection Strategy: preconnect
+   ======================================================================
+
+   [Thread 0] Status: 200, Time: 45.2ms
+   [Thread 1] Status: 200, Time: 45.8ms
+   ...
+
+   ======================================================================
+   RACE ATTACK RESULTS
+   ======================================================================
+   Total threads: 20
+   Successful: 18
+   Failed: 2
+
+   Timing Analysis:
+     Average response time: 46.5ms
+     Fastest response: 45.2ms
+     Slowest response: 48.7ms
+     Race window: 3.5ms
+     ✓ EXCELLENT race window (< 10ms)
+
+   Vulnerability Assessment:
+     ⚠️ VULNERABLE: Multiple requests succeeded (18)
+     ⚠️ Potential race condition detected!
+   ======================================================================
+
+----
+
 Why Python 3.14t?
 -----------------
 
 Python 3.14t is the **free-threaded** build that removes the Global Interpreter Lock (GIL):
 
-* **True Parallelism**: Multiple threads execute simultaneously without GIL contention
-* **Better Timing**: More consistent and precise race window timing
-* **Improved Performance**: Better CPU utilization for multi-threaded workloads
-* **Perfect for TRECO**: Race condition testing benefits significantly from true parallelism
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 35
 
-Read more: :doc:`about`
+   * - Feature
+     - Python 3.10-3.13 (GIL)
+     - Python 3.14t (GIL-Free)
+   * - **True Parallelism**
+     - Single thread at a time
+     - Multiple threads simultaneously
+   * - **Race Window Timing**
+     - ~10-100μs
+     - **< 1μs** (sub-microsecond)
+   * - **CPU Utilization**
+     - Limited by GIL
+     - Full multi-core usage
+   * - **Consistency**
+     - Variable timing
+     - Highly consistent
+   * - **Best for TRECO**
+     - Good
+     - **Excellent**
+
+.. note::
+   TRECO works with both Python 3.10+ and 3.14t, but achieves optimal performance with 3.14t's free-threaded build.
+
+----
 
 Real-World Applications
 -----------------------
 
-TRECO is designed for:
+TRECO is designed for authorized security testing in various scenarios:
 
-**Security Testing**
+Security Testing
+~~~~~~~~~~~~~~~~
 
-* Penetration testing of web APIs
-* Bug bounty hunting on e-commerce platforms
-* Security assessments of financial applications
-* Vulnerability research and proof-of-concept development
+* **Penetration Testing**: Test web APIs for race condition vulnerabilities
+* **Bug Bounty Hunting**: Identify exploitable race conditions in e-commerce, financial, and gaming platforms
+* **Security Assessments**: Validate security controls under concurrent load
+* **Vulnerability Research**: Systematic discovery and analysis of race condition patterns
 
-**Common Vulnerability Patterns**
+Common Attack Patterns
+~~~~~~~~~~~~~~~~~~~~~~~
 
-* **Double-spending attacks**: Payment processing race conditions
-* **Fund redemption exploits**: Gift card and coupon abuse
-* **Inventory manipulation**: Purchasing limited items beyond stock
-* **Privilege escalation**: Authentication and authorization bypasses
-* **Rate limiting bypasses**: Exceeding API quotas
+**Double-Spending Attacks**
+   Test payment processing systems for concurrent transaction vulnerabilities. Example: Process the same payment token multiple times.
 
-**Quality Assurance**
+**Fund Redemption Exploits**
+   Test gift card and coupon systems for redemption race conditions. Example: Redeem a gift card balance multiple times concurrently.
 
-* Concurrency testing for multi-threaded applications
-* Load testing under realistic concurrent scenarios
-* Stress testing to identify system breaking points
-* Integration testing with race condition scenarios
+**Inventory Manipulation**
+   Test e-commerce platforms for inventory race conditions. Example: Purchase limited stock items beyond available quantity.
+
+**Privilege Escalation**
+   Test authentication systems for concurrent access vulnerabilities. Example: Race authentication and authorization checks.
+
+**Rate Limiting Bypasses**
+   Test API rate limiting implementations for concurrent request vulnerabilities. Example: Exceed API quotas through simultaneous requests.
+
+Quality Assurance
+~~~~~~~~~~~~~~~~~
+
+* **Concurrency Testing**: Validate thread-safe implementations
+* **Load Testing**: Verify system behavior under concurrent load
+* **Stress Testing**: Identify breaking points and resource limits
+* **Integration Testing**: Test multi-component interactions under race conditions
+
+----
 
 Architecture Highlights
 -----------------------
 
+Component Overview
+~~~~~~~~~~~~~~~~~~
+
 **State Machine Engine**
-
-TRECO uses a YAML-based state machine to orchestrate complex attack flows:
-
-* Sequential state transitions with conditional logic
-* Context preservation and variable sharing across states
-* Multi-state attack patterns for sophisticated scenarios
-* Flexible transition rules based on HTTP status and response content
+   Orchestrates complex attack flows through sequential states with conditional transitions. Manages context and variables across states.
 
 **Race Coordinator**
+   Synchronizes threads using barrier, latch, or semaphore patterns. Coordinates simultaneous request dispatch for optimal race window timing.
 
-Precise thread synchronization for reliable race condition triggering:
-
-* Barrier synchronization for simultaneous request dispatch
-* Pre-connection strategy to eliminate network latency
-* Thread-safe result aggregation and analysis
-* Sub-microsecond timing measurements
+**HTTP Client**
+   Built on httpx for robust HTTP/HTTPS communication. Implements multiple connection strategies (preconnect, lazy, pooled, multiplexed).
 
 **Template Engine**
-
-Dynamic HTTP request generation with Jinja2:
-
-* Variable interpolation and conditional logic
-* Custom filters for TOTP, hashing, and environment variables
-* Support for complex request bodies and headers
-* Multi-line YAML support for readability
+   Jinja2-based request rendering with custom filters for TOTP generation, hashing, environment variables, and CLI arguments.
 
 **Data Extractors**
+   Plugin-based architecture supporting JSONPath, XPath, Regex, Boundary, Header, and Cookie extractors with auto-discovery.
 
-Plugin-based response parsing:
+**Metrics System**
+   Collects detailed timing statistics, calculates race windows, assesses vulnerability likelihood, and generates comprehensive reports.
 
-* JSONPath for JSON responses
-* XPath for XML/HTML responses
-* Regex for custom patterns
-* Boundary for delimiter-based extraction
-* Header and Cookie extractors
+Execution Flow
+~~~~~~~~~~~~~~
+
+1. **Configuration Loading**: Parse YAML attack definition and validate structure
+2. **State Initialization**: Set up initial state with variables from entrypoints
+3. **State Execution**: Execute states sequentially according to transition rules
+4. **Race Coordination**: Synchronize threads for race attacks using selected mechanism
+5. **Request Dispatch**: Send HTTP requests simultaneously for optimal timing
+6. **Response Processing**: Extract data from responses using configured extractors
+7. **Transition Logic**: Determine next state based on conditions and response data
+8. **Reporting**: Generate detailed attack report with timing analysis and assessment
+
+----
 
 Learn More
 ----------
 
-* :doc:`about` - Complete overview of TRECO's capabilities and architecture
-* :doc:`installation` - Step-by-step installation guide
+Ready to dive deeper? Here are the next steps:
+
+**Getting Started**
+
+* :doc:`about` - Complete overview of TRECO's capabilities and design philosophy
+* :doc:`installation` - Detailed installation guide for all platforms
 * :doc:`quickstart` - Your first race condition test in 5 minutes
-* :doc:`configuration` - Complete YAML configuration reference
-* :doc:`extractors` - All available data extractors
-* :doc:`templates` - Template syntax and filters
-* :doc:`examples` - Real-world attack examples
+
+**User Guide**
+
+* :doc:`configuration` - Complete YAML configuration reference with all options
+* :doc:`synchronization` - Understanding synchronization mechanisms in depth
+* :doc:`connection-strategies` - Choosing the right connection strategy
+* :doc:`extractors` - All available data extractors and usage examples
+* :doc:`templates` - Template syntax, filters, and advanced techniques
+* :doc:`examples` - Real-world attack examples and patterns
+
+**Reference**
+
+* :doc:`cli` - Command-line interface reference and usage
+* :doc:`api` - Python API documentation for programmatic use
+* :doc:`troubleshooting` - Common issues and solutions
+* :doc:`best-practices` - Performance optimization and security guidelines
+
+----
 
 Getting Help
 ------------
 
-* **GitHub Issues**: https://github.com/maycon/TRECO/issues
-* **Documentation**: https://treco.readthedocs.io
-* **Repository**: https://github.com/maycon/TRECO
+Need assistance? Here's how to get help:
+
+**Documentation**
+   * Complete documentation at `Read the Docs <https://treco.readthedocs.io>`_
+   * Search for specific topics using the search box
+   * Review code examples and tutorials
+
+**Community**
+   * `GitHub Issues <https://github.com/maycon/TRECO/issues>`_ for bug reports
+   * `GitHub Discussions <https://github.com/maycon/TRECO/discussions>`_ for questions
+   * Check existing issues before creating new ones
+
+**Before Asking**
+   1. Check this documentation
+   2. Search existing issues and discussions
+   3. Review :doc:`troubleshooting` guide
+   4. Try :doc:`examples` for working configurations
+
+----
 
 Security Notice
 ---------------
 
 .. warning::
 
-   TRECO is designed for **authorized security testing only**.
+   **TRECO is designed for authorized security testing only.**
+   
+   ⚠️ **You MUST:**
    
    * Obtain written authorization before testing
-   * Test only within agreed scope
-   * Comply with applicable laws
+   * Test only within agreed scope and boundaries
+   * Comply with all applicable laws and regulations
    * Report vulnerabilities responsibly
+   * Allow reasonable time for remediation
    
-   Users are solely responsible for ensuring compliance with applicable laws and regulations.
+   ⚠️ **Unauthorized testing may result in:**
+   
+   * Criminal prosecution under computer fraud laws
+   * Civil liability for damages
+   * Loss of security credentials and reputation
+   * Harm to individuals and organizations
+   
+   **Users are solely responsible** for ensuring their use complies with applicable laws, regulations, and agreements. The developers are not responsible for any misuse of this tool.
 
-Indices and tables
+----
+
+Indices and Tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+----
+
+.. raw:: html
+
+   <div align="center" style="margin-top: 2em; padding: 1em; border-top: 2px solid #ccc;">
+   <p><strong>⚠️ USE RESPONSIBLY - AUTHORIZED TESTING ONLY ⚠️</strong></p>
+   <p>Made with ❤️ by security researchers, for security researchers</p>
+   <p>
+   <a href="https://github.com/maycon/TRECO">⭐ Star on GitHub</a> |
+   <a href="https://treco.readthedocs.io">📖 Documentation</a> |
+   <a href="https://github.com/maycon/TRECO/issues">🐛 Report Bug</a> |
+   <a href="https://github.com/maycon/TRECO/issues">💡 Request Feature</a>
+   </p>
+   </div>
