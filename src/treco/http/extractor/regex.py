@@ -7,9 +7,8 @@ Extracts data from HTTP responses using regular expression patterns.
 import re
 import logging
 from typing import Any, Optional
-import requests
 
-from treco.http.extractor.base import BaseExtractor, register_extractor
+from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class RegExExtractor(BaseExtractor):
         # data = {"token": "abc123", "balance": "1000.50"}
     """
 
-    def extract(self, response: requests.Response, pattern: str) -> Optional[str]:
+    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[str]:
         """
         Extract data from response using regex patterns.
 

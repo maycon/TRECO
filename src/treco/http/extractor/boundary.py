@@ -6,9 +6,8 @@ Extracts data between left and right delimiters from HTTP responses.
 
 import logging
 from typing import Any, Optional
-import requests
 
-from treco.http.extractor.base import BaseExtractor, register_extractor
+from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class BoundaryExtractor(BaseExtractor):
 
     def extract(
         self, 
-        response: requests.Response, 
+        response: ResponseProtocol, 
         pattern: str,
         separator: str = BOUNDARY_SEPARATOR
     ) -> Optional[Any]:

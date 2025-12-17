@@ -6,9 +6,8 @@ Extracts data from HTTP response headers.
 
 import logging
 from typing import Any, Optional
-import requests
 
-from treco.http.extractor.base import BaseExtractor, register_extractor
+from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class HeaderExtractor(BaseExtractor):
     Registered as 'header' with aliases 'headers' and 'http_header'.
     """
 
-    def extract(self, response: requests.Response, pattern: str) -> Optional[Any]:
+    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[Any]:
         """
         Extract data from response headers.
 
@@ -46,7 +45,7 @@ class HeaderExtractor(BaseExtractor):
         References:
             - https://www.rfc-editor.org/rfc/rfc7230#section-3.2
         """
-        # requests.Response.headers is already a CaseInsensitiveDict
+        # ResponseProtocol.headers is already a CaseInsensitiveDict
         # so we can access headers regardless of case
         header_name = pattern.strip()
 

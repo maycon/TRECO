@@ -1,13 +1,11 @@
 """
 HTTP client implementation.
 
-Provides HTTP/HTTPS communication with the target server.
+Provides HTTP/HTTPS communication with the target server using httpx.
 """
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from typing import Optional
+import httpx
+from typing import Optional, Union
 
 import logging
 
@@ -22,10 +20,9 @@ class HTTPClient:
     HTTP client for sending requests to the target server.
 
     Features:
-    - HTTP and HTTPS support
+    - HTTP/1.1 and HTTP/2 support
     - Configurable TLS verification
     - Connection pooling
-    - Automatic retry on failure
     - Session management
 
     Example:
@@ -40,58 +37,56 @@ class HTTPClient:
             {"username": "alice"}
         ''')
 
-        logger.info(response.status_code)  # 200
+        print(response.status_code)  # 200
     """
 
-    def __init__(self, config: ServerConfig):
+    def __init__(self, config: ServerConfig, http2: bool = False):
         """
         Initialize HTTP client with server configuration.
 
         Args:
             config: Server configuration (host, port, TLS settings)
+            http2: Whether to use HTTP/2 (default: False for compatibility)
         """
         self.config = config
         self.parser = HTTPParser()
+        self._http2 = http2
 
         # Build base URL
         scheme = "https" if config.tls.enabled else "http"
         self.base_url = f"{scheme}://{config.host}:{config.port}"
 
-        # Create session with connection pooling
-        self.session = self._create_session()
+        # Create client with connection pooling
+        self.client = self._create_client()
 
-    def _create_session(self) -> requests.Session:
+    def _create_client(self) -> httpx.Client:
         """
-        Create a requests Session with retry logic and pooling.
+        Create an httpx Client with connection pooling.
 
         Returns:
-            Configured requests.Session
+            Configured httpx.Client
         """
-        session = requests.Session()
-
-        # Configure retry strategy
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=0.5,
-            status_forcelist=[500, 502, 503, 504],
+        # Configure connection limits
+        limits = httpx.Limits(
+            max_keepalive_connections=20,
+            max_connections=100,
+            keepalive_expiry=30.0,
         )
 
-        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=20, pool_maxsize=20)
+        # Configure timeout
+        timeout = httpx.Timeout(30.0)
 
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
+        client = httpx.Client(
+            http2=self._http2,
+            verify=self.config.tls.verify_cert if self.config.tls.enabled else True,
+            timeout=timeout,
+            limits=limits,
+            follow_redirects=self.config.http.follow_redirects,
+        )
 
-        # Configure TLS verification
-        if self.config.tls.enabled and not self.config.tls.verify_cert:
-            session.verify = False
-            # Suppress InsecureRequestWarning
-            import urllib3
+        return client
 
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-        return session
-
-    def send(self, http_raw: str) -> requests.Response:
+    def send(self, http_raw: str) -> httpx.Response:
         """
         Send an HTTP request from raw HTTP text.
 
@@ -99,7 +94,7 @@ class HTTPClient:
             http_raw: Raw HTTP request text (method, headers, body)
 
         Returns:
-            requests.Response object
+            httpx.Response object
 
         Example:
             response = client.send('''
@@ -114,30 +109,48 @@ class HTTPClient:
         url = self.base_url + path
 
         # Send request
-        response = self.session.request(
-            method = method,
-            url = url,
-            headers = headers,
-            allow_redirects = self.config.http.follow_redirects,
-            verify=self.config.tls.verify_cert,
-            data = body,
-            timeout = 30,
+        response = self.client.request(
+            method=method,
+            url=url,
+            headers=headers,
+            content=body if body else None,
         )
 
         return response
 
-    def create_session(self) -> requests.Session:
+    def create_client(self, http2: bool = False) -> httpx.Client:
         """
-        Create a new session for multi-threaded usage.
+        Create a new client for multi-threaded usage.
 
-        Each thread in a race condition attack should have its own session
+        Each thread in a race condition attack should have its own client
         to avoid contention.
 
+        Args:
+            http2: Whether to use HTTP/2
+
         Returns:
-            New requests.Session
+            New httpx.Client
         """
-        return self._create_session()
+        limits = httpx.Limits(
+            max_keepalive_connections=1,
+            max_connections=1,
+            keepalive_expiry=30.0,
+        )
+
+        return httpx.Client(
+            http2=http2,
+            verify=self.config.tls.verify_cert if self.config.tls.enabled else True,
+            timeout=httpx.Timeout(30.0),
+            limits=limits,
+            follow_redirects=self.config.http.follow_redirects,
+            base_url=self.base_url,
+        )
+
+    # Alias for backwards compatibility
+    def create_session(self) -> httpx.Client:
+        """Alias for create_client() for backwards compatibility."""
+        return self.create_client()
 
     def close(self) -> None:
-        """Close the session and release resources."""
-        self.session.close()
+        """Close the client and release resources."""
+        self.client.close()

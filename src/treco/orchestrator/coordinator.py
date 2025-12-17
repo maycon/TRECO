@@ -28,7 +28,7 @@ from treco.connection import create_connection_strategy
 
 class HttpxResponseAdapter:
     """
-    Adapter to make httpx.Response compatible with requests.Response interface.
+    Adapter to make httpx.Response compatible with ResponseProtocol interface.
     
     This allows existing extractors and template code to work with httpx responses
     without modification.

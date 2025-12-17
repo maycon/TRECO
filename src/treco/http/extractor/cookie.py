@@ -6,9 +6,8 @@ Extracts cookie values from HTTP response Set-Cookie headers.
 
 import logging
 from typing import Any, Optional
-import requests
 
-from treco.http.extractor.base import BaseExtractor, register_extractor
+from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class CookieExtractor(BaseExtractor):
     Registered as 'cookie' with aliases 'cookies', 'set_cookie', and 'set-cookie'.
     """
 
-    def extract(self, response: requests.Response, pattern: str) -> Optional[Any]:
+    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[Any]:
         """
         Extract cookie value from response.
 
@@ -48,7 +47,6 @@ class CookieExtractor(BaseExtractor):
 
         References:
             - https://www.rfc-editor.org/rfc/rfc6265
-            - https://requests.readthedocs.io/en/latest/api/#requests.Response.cookies
         """
         cookie_name = pattern.strip()
 

@@ -4,11 +4,27 @@ Defines the base classes and interfaces for data extractors.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Type, List, Optional
+from typing import Dict, Type, List, Optional, Any, Protocol, runtime_checkable
 from pathlib import Path
 import pkgutil
 import importlib
-import requests
+
+
+@runtime_checkable
+class ResponseProtocol(Protocol):
+    """
+    Protocol defining the interface for HTTP responses.
+    
+    This allows extractors to work with any response object that has
+    these attributes, whether from httpx, requests, or custom adapters.
+    """
+    status_code: int
+    text: str
+    content: bytes
+    headers: Any  # Dict-like
+    cookies: Any  # Dict-like (httpx.Cookies or RequestsCookieJar)
+    
+    def json(self) -> Any: ...
 
 
 class BaseExtractor(ABC):
@@ -23,18 +39,19 @@ class BaseExtractor(ABC):
     _extractor_aliases: List[str] = []
 
     @abstractmethod
-    def extract(self, response: requests.Response, pattern: str) -> Optional[str]:
+    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[str]:
         """
         Extract data from the HTTP response.
 
         Args:
-            response: HTTP response object
-            patterns: Dictionary of variable_name -> extraction_pattern
+            response: HTTP response object (httpx.Response or compatible)
+            pattern: Extraction pattern
 
         Returns:
-            Dictionary of extracted variables
+            Extracted value or None
         """
         pass
+
 
 class ExtractorRegistry:
     """

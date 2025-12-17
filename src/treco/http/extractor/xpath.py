@@ -7,9 +7,8 @@ Extracts data from XML/HTML responses using XPath expressions.
 import logging
 from typing import Any, Optional
 from lxml import etree # type: ignore
-import requests
 
-from treco.http.extractor.base import BaseExtractor, register_extractor
+from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class XPathExtractor(BaseExtractor):
     Registered as 'xpath' with aliases 'xml_path' and 'html_path'.
     """
 
-    def extract(self, response: requests.Response, pattern: str) -> Optional[Any]:
+    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[Any]:
         """
         Extract data from response using XPath expression.
 
@@ -67,7 +66,7 @@ class XPathExtractor(BaseExtractor):
         return self._extract_value(matches[0])
 
     def _parse_content(
-        self, content: str, response: requests.Response
+        self, content: str, response: ResponseProtocol
     ) -> Optional[etree._Element]:
         """
         Parse content as HTML or XML based on content-type.
