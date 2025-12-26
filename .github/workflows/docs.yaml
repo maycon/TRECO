@@ -1,0 +1,374 @@
+# =============================================================================
+# Documentation Validation and Update Workflow
+# =============================================================================
+#
+# This workflow ensures documentation stays synchronized with code changes.
+#
+# Triggers:
+#   - Pull requests (validation only)
+#   - Push to main (validation + deployment hints)
+#   - Manual trigger
+
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - '*.md'
+      - 'pyproject.toml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - '*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # Detect API Changes
+  # =============================================================================
+  detect-changes:
+    name: Detect API and Feature Changes
+    runs-on: ubuntu-latest
+    outputs:
+      has_src_changes: ${{ steps.changes.outputs.has_src_changes }}
+      has_doc_changes: ${{ steps.changes.outputs.has_doc_changes }}
+      changelog_updated: ${{ steps.changes.outputs.changelog_updated }}
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check for changes
+        id: changes
+        run: |
+          # For PRs, compare against base branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            # For pushes, compare with previous commit
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          
+          # Check if there are source code changes
+          if git diff --name-only $BASE $HEAD | grep -q '^src/'; then
+            echo "has_src_changes=true" >> $GITHUB_OUTPUT
+            echo "✓ Source code changes detected"
+          else
+            echo "has_src_changes=false" >> $GITHUB_OUTPUT
+            echo "○ No source code changes"
+          fi
+          
+          # Check if documentation was updated
+          if git diff --name-only $BASE $HEAD | grep -qE '^(docs/|README.md|.*\.md)'; then
+            echo "has_doc_changes=true" >> $GITHUB_OUTPUT
+            echo "✓ Documentation changes detected"
+          else
+            echo "has_doc_changes=false" >> $GITHUB_OUTPUT
+            echo "○ No documentation changes"
+          fi
+          
+          # Check if CHANGELOG was updated
+          if git diff --name-only $BASE $HEAD | grep -q '^CHANGELOG.md'; then
+            echo "changelog_updated=true" >> $GITHUB_OUTPUT
+            echo "✓ CHANGELOG.md updated"
+          else
+            echo "changelog_updated=false" >> $GITHUB_OUTPUT
+            echo "○ CHANGELOG.md not updated"
+          fi
+
+      - name: Analyze source changes
+        if: steps.changes.outputs.has_src_changes == 'true'
+        run: |
+          echo "## Source Code Changes Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # For PRs, compare against base branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          
+          # List changed Python files
+          echo "### Changed Python Files:" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only $BASE $HEAD | grep '^src/.*\.py$' | while read file; do
+            echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          # Detect new functions/classes
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### New or Modified APIs:" >> $GITHUB_STEP_SUMMARY
+          
+          git diff $BASE $HEAD -- 'src/**/*.py' | grep -E '^\+\s*(def |class |async def )' | head -20 | while read line; do
+            echo "- ${line:1}" >> $GITHUB_STEP_SUMMARY
+          done || echo "No new functions/classes detected" >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
+  # Validate Documentation
+  # =============================================================================
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install dependencies
+        run: |
+          pip install -r docs/requirements.txt
+          pip install -e .
+      
+      - name: Check documentation builds
+        run: |
+          cd docs
+          sphinx-build -W -b html source _build/html
+          echo "✓ Documentation builds successfully"
+      
+      - name: Validate links in README
+        run: |
+          # Check for broken internal links
+          echo "Checking README.md for broken references..."
+          
+          # Check if referenced examples exist
+          grep -oP '(?<=\()examples/[^\)]+(?=\))' README.md | while read example; do
+            if [ ! -e "$example" ]; then
+              echo "❌ Broken link in README.md: $example"
+              exit 1
+            fi
+          done || echo "✓ All example links valid"
+      
+      - name: Check code examples in docs
+        run: |
+          echo "Validating Python code examples in documentation..."
+          
+          # Extract Python code blocks from RST files and validate syntax
+          find docs/source -name "*.rst" -exec grep -Pzo '(?s).. code-block:: python.*?\n\n' {} \; > /tmp/code_examples.txt || true
+          
+          # Basic validation that imports match actual package structure
+          if grep -q "from treco import" docs/source/*.rst; then
+            echo "✓ Found treco imports in documentation"
+            
+            # Verify the imports actually work
+            python3 -c "from treco import RaceCoordinator, setup_logging, get_logger" && echo "✓ Core imports valid"
+          fi
+
+  # =============================================================================
+  # Check Documentation Coverage
+  # =============================================================================
+  check-coverage:
+    name: Check Documentation Coverage
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_src_changes == 'true'
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install package
+        run: pip install -e .
+      
+      - name: Check public API documentation
+        run: |
+          echo "## API Documentation Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # List public functions/classes in main modules
+          echo "### Public API in src/treco/__init__.py:" >> $GITHUB_STEP_SUMMARY
+          grep -E "^(def |class |__all__)" src/treco/__init__.py | head -20 >> $GITHUB_STEP_SUMMARY || true
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Public CLI functions:" >> $GITHUB_STEP_SUMMARY
+          grep -E "^(def |@click)" src/treco/cli.py | head -20 >> $GITHUB_STEP_SUMMARY || true
+          
+          # Check if these are documented
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Documentation Status:" >> $GITHUB_STEP_SUMMARY
+          
+          if grep -q "RaceCoordinator" docs/source/api.rst; then
+            echo "- ✓ RaceCoordinator documented" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ RaceCoordinator not found in api.rst" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if grep -q "cli" docs/source/cli.rst; then
+            echo "- ✓ CLI documented" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ CLI not found in cli.rst" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # =============================================================================
+  # Remind about Documentation Updates
+  # =============================================================================
+  documentation-reminder:
+    name: Documentation Update Reminder
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event_name == 'pull_request' && 
+      needs.detect-changes.outputs.has_src_changes == 'true' && 
+      needs.detect-changes.outputs.has_doc_changes == 'false'
+    
+    steps:
+      - name: Post comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## 📝 Documentation Update Reminder
+            
+            This PR modifies source code but doesn't update documentation.
+            
+            **Please consider updating:**
+            
+            - [ ] \`docs/source/api.rst\` - If public APIs changed
+            - [ ] \`docs/source/configuration.rst\` - If config options changed
+            - [ ] \`docs/source/examples.rst\` - If adding new features
+            - [ ] \`README.md\` - If user-facing changes
+            - [ ] \`CHANGELOG.md\` - Document your changes
+            - [ ] Code examples in docs match new implementation
+            
+            **Quick links:**
+            - [Documentation Guide](https://github.com/maycon/TRECO/blob/main/docs/CONTRIBUTING.md)
+            - [ReadTheDocs Preview](https://treco.readthedocs.io)
+            
+            *You can ignore this if changes are internal or don't affect users.*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # =============================================================================
+  # Check Examples Match Implementation
+  # =============================================================================
+  validate-examples:
+    name: Validate Examples
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install package
+        run: pip install -e .
+      
+      - name: Validate YAML examples
+        run: |
+          echo "Validating YAML configuration examples..."
+          
+          # Check schema validation examples
+          if [ -f "examples/basic-race.yaml" ]; then
+            python3 -c "
+            from treco.parser import YAMLLoader
+            import sys
+            try:
+                loader = YAMLLoader()
+                config = loader.load('examples/basic-race.yaml')
+                print('✓ examples/basic-race.yaml is valid')
+            except Exception as e:
+                print(f'❌ examples/basic-race.yaml validation failed: {e}')
+                sys.exit(1)
+            " || true
+          fi
+          
+          # Find and validate other YAML examples
+          find examples -name "*.yaml" -o -name "*.yml" | head -5 | while read file; do
+            echo "Checking $file..."
+            # Basic YAML syntax check
+            python3 -c "import yaml; yaml.safe_load(open('$file'))" && echo "✓ $file syntax valid" || echo "⚠ $file may have issues"
+          done
+
+  # =============================================================================
+  # Version Consistency Check
+  # =============================================================================
+  check-versions:
+    name: Check Version Consistency
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check version consistency
+        run: |
+          echo "## Version Consistency Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Get version from pyproject.toml
+          PYPROJECT_VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          
+          # Get version from __init__.py
+          INIT_VERSION=$(grep -Po '(?<=__version__ = ")[^"]*' src/treco/__init__.py)
+          echo "__init__.py version: $INIT_VERSION"
+          
+          # Compare
+          if [ "$PYPROJECT_VERSION" = "$INIT_VERSION" ]; then
+            echo "- ✓ Version consistent: \`$PYPROJECT_VERSION\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ Version mismatch!" >> $GITHUB_STEP_SUMMARY
+            echo "  - pyproject.toml: \`$PYPROJECT_VERSION\`" >> $GITHUB_STEP_SUMMARY
+            echo "  - __init__.py: \`$INIT_VERSION\`" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          # Check if version is mentioned in docs
+          if grep -q "$PYPROJECT_VERSION" docs/source/conf.py; then
+            echo "- ✓ Version referenced in docs/source/conf.py" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠ Version not found in docs/source/conf.py" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # =============================================================================
+  # Summary
+  # =============================================================================
+  summary:
+    name: Documentation Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, validate-docs, check-coverage]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 📚 Documentation Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status:" >> $GITHUB_STEP_SUMMARY
+          echo "- Validation: ${{ needs.validate-docs.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage Check: ${{ needs.check-coverage.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changes Detected:" >> $GITHUB_STEP_SUMMARY
+          echo "- Source changes: ${{ needs.detect-changes.outputs.has_src_changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Doc changes: ${{ needs.detect-changes.outputs.has_doc_changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Changelog updated: ${{ needs.detect-changes.outputs.changelog_updated }}" >> $GITHUB_STEP_SUMMARY

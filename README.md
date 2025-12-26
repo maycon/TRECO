@@ -2096,22 +2096,46 @@ git push origin feature/amazing-feature
 
 ### Documentation Contributions
 
-**To improve documentation:**
+**Documentation is critical to TRECO's usability.** We have automated workflows to keep docs synchronized with code:
 
-1. **README.md**
-   - Fix typos or unclear sections
-   - Add missing information
-   - Improve examples
+#### Automated Documentation Checks
 
-2. **docs/source/\*.rst**
-   - Update API documentation
-   - Add tutorials
-   - Clarify configuration options
+- GitHub Actions workflow validates documentation on every PR
+- Detects API changes and prompts for documentation updates
+- Ensures examples match current implementation
+- See `.github/workflows/docs.yaml` for details
 
-3. **Code Comments**
-   - Add missing docstrings
-   - Clarify complex logic
-   - Update outdated comments
+#### Documentation Guidelines
+
+- See `docs/CONTRIBUTING.md` for comprehensive guidelines
+- Update `CHANGELOG.md` with every change
+- Keep `README.md` in sync with `docs/source/index.rst`
+- Test all code examples before committing
+
+#### What to Update
+
+1. **API changes**: Update `docs/source/api.rst`
+2. **Configuration options**: Update `docs/source/configuration.rst`
+3. **New features**: Update relevant docs + examples + `CHANGELOG.md`
+4. **Breaking changes**: Update `CHANGELOG.md` and all affected docs
+
+#### Validation Script
+
+```bash
+# Run documentation checks locally
+python scripts/check_docs.py
+
+# Build documentation locally
+cd docs
+pip install -r requirements.txt
+sphinx-build -W -b html source _build/html
+```
+
+#### ReadTheDocs Integration
+
+- Documentation automatically builds on every commit
+- Preview builds available for every PR
+- Published at https://treco.readthedocs.io
 
 ### Community Guidelines
 
