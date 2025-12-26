@@ -1,0 +1,46 @@
+# ============================================================================
+# TRECO Example: Generator Source - Sequential IDs
+# ============================================================================
+
+metadata:
+  name: "Generator Source Example - ID Enumeration"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-639"
+
+target:
+  host: "{{ env('TARGET_HOST', 'api.example.com') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+
+entrypoint:
+  state: enumerate_users
+  input:
+    user_ids:
+      source: generator
+      expression: "{{ 1000 + index }}"
+      count: 100
+
+states:
+  enumerate_users:
+    description: "Enumerate user accounts by ID"
+    
+    race:
+      threads: 100
+      input_mode: distribute
+      sync_mechanism: barrier
+    
+    request: |
+      GET /api/users/{{ input.user_id }} HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ env('API_TOKEN', 'test-token') }}
+    
+    logger:
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        ✅ User {{ input.user_id }}: Found
+        {% elif response.status_code == 404 %}
+        ⚪ User {{ input.user_id }}: Not found
+        {% endif %}
