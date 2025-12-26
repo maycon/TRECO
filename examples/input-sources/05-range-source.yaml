@@ -1,0 +1,45 @@
+# ============================================================================
+# TRECO Example: Range Source - Numeric Iteration
+# ============================================================================
+
+metadata:
+  name: "Range Source Example"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-200"
+
+target:
+  host: "{{ env('TARGET_HOST', 'api.example.com') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+
+entrypoint:
+  state: scan_resources
+  input:
+    resource_ids:
+      source: range
+      start: 1
+      count: 50
+
+states:
+  scan_resources:
+    description: "Scan resource endpoints"
+    
+    race:
+      threads: 50
+      input_mode: distribute
+      sync_mechanism: barrier
+    
+    request: |
+      GET /api/resources/{{ input.resource_id }} HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        ✅ Resource {{ input.resource_id }}: Found
+        {% else %}
+        ❌ Resource {{ input.resource_id }}: Error {{ response.status_code }}
+        {% endif %}

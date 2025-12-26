@@ -43,6 +43,7 @@ TRECO enables security researchers to orchestrate highly precise concurrent HTTP
 - **🔄 Flexible Synchronization**: Barrier, countdown latch, and semaphore mechanisms
 - **🌐 Full HTTP/HTTPS Support**: Complete HTTP/1.1 with configurable TLS/SSL
 - **🎨 Powerful Template Engine**: Jinja2-based with custom filters (TOTP, hashing, env vars, CLI args)
+- **🎯 Dynamic Input Sources**: Different values per thread for brute-force, enumeration, and combination attacks
 - **📊 Automatic Analysis**: Race window calculation, vulnerability detection, and detailed statistics
 - **🔌 Extensible Architecture**: Plugin-based extractors and connection strategies
 - **🖥️ Multi-Platform**: Linux, macOS, and Windows (WSL recommended)
@@ -58,6 +59,31 @@ TRECO also provides additional advanced features for specialized testing scenari
 - **🔄 Connection Reuse**: Control over TCP connection reuse behavior
 - **↪️ Redirect Handling**: Configurable HTTP redirect following
 - **⏱️ Timeout Configuration**: Global and per-state timeout control
+
+### Dynamic Input Sources
+
+TRECO supports dynamic input distribution across race threads, enabling:
+
+- **🔐 Brute-Force Attacks**: Each thread tries a different password
+- **👥 Credential Stuffing**: Test all username/password combinations
+- **🔢 Enumeration**: Sequential ID or resource testing
+- **📝 Wordlist Attacks**: Load from files or built-in wordlists
+- **🎲 Random Fuzzing**: Random value generation per thread
+
+**Input Modes:**
+- `distribute`: Round-robin value distribution
+- `product`: Cartesian product of all inputs
+- `random`: Random selection per thread
+- `same`: All threads use same value (default)
+
+**Input Sources:**
+- Inline lists in YAML
+- External wordlist files
+- Built-in wordlists (`builtin:passwords-top-100`, `builtin:usernames-common`)
+- Jinja2 generator expressions
+- Numeric ranges
+
+See [examples/input-sources/](examples/input-sources/) for detailed examples.
 
 📖 **See [docs/WHEN_BLOCKS.md](docs/WHEN_BLOCKS.md) for multi-condition when blocks documentation:**
 - Status code matching (exact, range, multiple)

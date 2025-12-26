@@ -313,6 +313,50 @@ class RaceCoordinator:
         # Prepare strategies
         conn_strategy.prepare(num_threads, self.http_client)
         race_sync.prepare(num_threads)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # INPUT DISTRIBUTION: Prepare input values for each thread
+        # ═══════════════════════════════════════════════════════════════
+        from treco.input import InputDistributor, InputMode, InputConfig
+        
+        # Merge entrypoint input with state-level input (state overrides entrypoint)
+        merged_input = {}
+        if self.config.entrypoint.input:
+            merged_input.update(self.config.entrypoint.input)
+        if state.input:
+            merged_input.update(state.input)
+        
+        # Resolve input configurations to actual values
+        resolved_inputs: Dict[str, List[Any]] = {}
+        for input_name, input_config in merged_input.items():
+            if isinstance(input_config, list):
+                # Simple list of values
+                resolved_inputs[input_name] = input_config
+            elif isinstance(input_config, dict):
+                # Complex input configuration (file, generator, range)
+                config = InputConfig.from_dict(input_config)
+                resolved_inputs[input_name] = config.resolve(self.template_engine)
+            else:
+                # Single value - wrap in list
+                resolved_inputs[input_name] = [input_config]
+        
+        # Create input distributor if we have inputs
+        input_distributor = None
+        if resolved_inputs:
+            # Get input mode from race config
+            try:
+                input_mode = InputMode[race_config.input_mode.upper()]
+            except (KeyError, AttributeError):
+                input_mode = InputMode.SAME
+            
+            input_distributor = InputDistributor(
+                inputs=resolved_inputs,
+                mode=input_mode,
+                num_threads=num_threads
+            )
+            
+            logger.info(f"Input Mode: {input_mode.value}")
+            logger.info(f"Input Variables: {list(resolved_inputs.keys())}")
 
         # Shared results list (thread-safe with lock)
         race_results: List[RaceResult] = []
@@ -332,6 +376,11 @@ class RaceCoordinator:
                     context_input = self.context.to_dict()
                     context_input["target"] = self.http_client.config
                     context_input["thread"] = thread_info
+                    
+                    # Add thread-specific input if distributor exists
+                    if input_distributor:
+                        thread_input = input_distributor.get_for_thread(thread_id)
+                        context_input["input"] = thread_input
 
                     logger_output = self.engine.render(
                         state.logger.on_thread_enter,
@@ -350,6 +399,11 @@ class RaceCoordinator:
                 context_input = context.to_dict()
                 context_input["target"] = self.http_client.config
                 context_input["thread"] = {"id": thread_id, "count": num_threads}
+                
+                # Add thread-specific input if distributor exists
+                if input_distributor:
+                    thread_input = input_distributor.get_for_thread(thread_id)
+                    context_input["input"] = thread_input
 
                 http_text = self.template_engine.render(state.request, context_input, context)
                 method, path, headers, body = self.http_parser.parse(http_text)
@@ -433,6 +487,11 @@ class RaceCoordinator:
                         "response": response,
                         "timing_ms": timing_ns / 1_000_000
                     })
+                    
+                    # Add thread-specific input if distributor exists
+                    if input_distributor:
+                        thread_input = input_distributor.get_for_thread(thread_id)
+                        context_input["input"] = thread_input
 
                     logger_output = self.engine.render(
                         state.logger.on_thread_leave,
