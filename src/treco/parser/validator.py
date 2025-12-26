@@ -7,7 +7,6 @@ Validates YAML structure, required fields, and references.
 from typing import Dict, Any, Set
 
 from treco.http.extractor import get_extractor, ExtractorRegistry
-from treco.models.config import Entrypoint
 
 
 class ConfigValidator:
@@ -90,12 +89,13 @@ class ConfigValidator:
         if not entrypoint:
             raise ValueError("At least one entrypoint is required")
 
-        if not "state" in entrypoint:
-            raise ValueError(f"Entrypoint missing 'state' field")
+        if "state" not in entrypoint:
+            raise ValueError("Entrypoint missing 'state' field")
 
         # Check that referenced state exists
-        if entrypoint["state"] not in states:
-            raise ValueError(f"Entrypoint references non-existent state: {entrypoint["state"]}")
+        state_name = entrypoint["state"]
+        if state_name not in states:
+            raise ValueError(f"Entrypoint references non-existent state: {state_name}")
 
     def _validate_states(self, states: Dict[str, Any]) -> None:
         """Validate states section."""
@@ -413,9 +413,10 @@ class ConfigValidator:
             pattern_type = pattern.get("type", "regex")
 
             if not get_extractor(pattern_type):
+                valid_types = ", ".join(list(ExtractorRegistry.get_registered_types()))
                 raise ValueError(
                     f"State '{state_name}' extractor for variable '{var_name}' "
-                    f"has invalid pattern type: {pattern_type}. Valid types: {", ".join(list(ExtractorRegistry.get_registered_types()))}"
+                    f"has invalid pattern type: {pattern_type}. Valid types: {valid_types}"
                 )
     
     def _validate_mtls_config(self, tls: Dict[str, Any]) -> None:
@@ -450,7 +451,8 @@ class ConfigValidator:
         if has_cert_key:
             if "client_cert" not in tls or "client_key" not in tls:
                 raise ValueError(
-                    "mTLS with separate cert/key requires both 'client_cert' and 'client_key'"
+                    "mTLS with separate cert/key requires both "
+                    "'client_cert' and 'client_key'"
                 )
             
             # Note: We don't validate file existence here because paths may contain
