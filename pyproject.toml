@@ -1,6 +1,6 @@
 [project]
 name = "treco-framework"
-version = "1.3.0"
+version = "1.3.1"
 description = "Tactical Race Exploitation & Concurrency Orchestrator"
 readme = "README.md"
 license = { text = "MIT" }
