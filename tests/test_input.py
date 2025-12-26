@@ -282,7 +282,7 @@ class TestInputModes:
         
         # Should get the first combination
         assignment = dist.get_for_thread(0)
-        assert assignment in [
-            {"user": "alice", "pass": "123"},
-            {"user": "admin", "pass": "123"}
-        ] or "user" in assignment and "pass" in assignment
+        # Verify it's a valid combination from the product
+        assert "user" in assignment and "pass" in assignment
+        assert assignment["user"] in ["alice", "bob"]
+        assert assignment["pass"] in ["123", "456"]
