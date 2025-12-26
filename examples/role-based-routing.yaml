@@ -1,0 +1,295 @@
+# ============================================================================
+# TRECO Configuration: Role-Based Attack Routing
+# ============================================================================
+#
+# Demonstrates using when blocks to route attacks based on user roles
+# extracted from API responses. Different privilege levels trigger different
+# attack paths.
+#
+# Usage:
+#   treco examples/role-based-routing.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Role-Based Attack Routing"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-639"
+  description: |
+    Uses multi-condition when blocks to route attacks based on user role
+    and privileges extracted from authentication responses.
+
+target:
+  host: "api.example.test"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+  http:
+    follow_redirects: false
+
+entrypoint:
+  state: authenticate
+  input:
+    username: "testuser"
+    password: "password123"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # --------------------------------------------------------------------------
+  # Authentication
+  # --------------------------------------------------------------------------
+  authenticate:
+    description: "Authenticate and extract user role"
+    request: |
+      POST /api/auth/login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {
+        "username": "{{ username }}",
+        "password": "{{ password }}"
+      }
+
+    extract:
+      token:
+        type: jpath
+        pattern: "$.token"
+      role:
+        type: jpath
+        pattern: "$.user.role"
+      permissions:
+        type: jpath
+        pattern: "$.user.permissions"
+      account_balance:
+        type: jpath
+        pattern: "$.user.account.balance"
+
+    next:
+      # Route to admin panel if user is admin
+      - when:
+          - status: 200
+          - condition: "{{ role == 'admin' }}"
+        goto: admin_vulnerabilities
+
+      # Route to high-value target if balance is high
+      - when:
+          - status: 200
+          - condition: "{{ account_balance | float > 1000 }}"
+          - condition: "{{ 'transfer' in permissions }}"
+        goto: high_value_target
+
+      # Route to standard user vulnerabilities
+      - when:
+          - status: 200
+          - condition: "{{ role == 'user' }}"
+        goto: user_vulnerabilities
+
+      # Failed authentication
+      - when:
+          - status: 401
+        goto: auth_failed
+
+      # Any other response
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Admin Attack Path
+  # --------------------------------------------------------------------------
+  admin_vulnerabilities:
+    description: "Test admin-specific vulnerabilities"
+    request: |
+      GET /api/admin/users HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ authenticate.token }}
+
+    next:
+      # Check if we can access admin panel
+      - when:
+          - status: 200
+          - body_contains: "users"
+        goto: admin_privilege_escalation
+
+      # Access denied
+      - when:
+          - status: 403
+        goto: privilege_check_failed
+
+      - otherwise:
+        goto: error
+
+  admin_privilege_escalation:
+    description: "Attempt to escalate privileges"
+    request: |
+      POST /api/admin/users/promote HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ authenticate.token }}
+      Content-Type: application/json
+      
+      {
+        "user_id": 999,
+        "new_role": "superadmin"
+      }
+
+    next:
+      - when:
+          - status: 200
+          - body_contains: "promoted"
+        goto: admin_attack_success
+
+      - otherwise:
+        goto: admin_attack_failed
+
+  # --------------------------------------------------------------------------
+  # High-Value Target Path
+  # --------------------------------------------------------------------------
+  high_value_target:
+    description: "Test fund transfer vulnerabilities"
+    request: |
+      POST /api/transactions/transfer HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ authenticate.token }}
+      Content-Type: application/json
+      
+      {
+        "to_account": "attacker-account",
+        "amount": 1000
+      }
+
+    extract:
+      transaction_id:
+        type: jpath
+        pattern: "$.transaction_id"
+      new_balance:
+        type: jpath
+        pattern: "$.new_balance"
+
+    next:
+      # Transfer succeeded
+      - when:
+          - status: 200
+          - body_contains: "transaction_id"
+          - condition: "{{ new_balance | float < account_balance | float }}"
+        goto: transfer_success
+
+      # Rate limited
+      - when:
+          - status: 429
+        goto: rate_limited
+
+      # Transfer failed
+      - otherwise:
+        goto: transfer_failed
+
+  # --------------------------------------------------------------------------
+  # Standard User Path
+  # --------------------------------------------------------------------------
+  user_vulnerabilities:
+    description: "Test standard user vulnerabilities"
+    request: |
+      GET /api/user/profile HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ authenticate.token }}
+
+    extract:
+      profile_data:
+        type: jpath
+        pattern: "$.profile"
+
+    next:
+      - when:
+          - status: 200
+          - body_contains: "profile"
+        goto: user_data_leak_test
+
+      - otherwise:
+        goto: error
+
+  user_data_leak_test:
+    description: "Check for information disclosure"
+    request: |
+      GET /api/users?limit=1000 HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ authenticate.token }}
+
+    extract:
+      user_count:
+        type: jpath
+        pattern: "$.users | length"
+
+    next:
+      # Detected data leak
+      - when:
+          - status: 200
+          - condition: "{{ user_count | int > 100 }}"
+        goto: data_leak_found
+
+      # No leak detected
+      - when:
+          - status: 200
+        goto: no_data_leak
+
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Terminal States
+  # --------------------------------------------------------------------------
+  admin_attack_success:
+    description: "Admin privilege escalation successful"
+    next:
+      - goto: end
+
+  admin_attack_failed:
+    description: "Admin privilege escalation failed"
+    next:
+      - goto: end
+
+  privilege_check_failed:
+    description: "Could not verify admin privileges"
+    next:
+      - goto: end
+
+  transfer_success:
+    description: "High-value transfer successful"
+    next:
+      - goto: end
+
+  transfer_failed:
+    description: "Transfer failed"
+    next:
+      - goto: end
+
+  rate_limited:
+    description: "Request rate limited"
+    next:
+      - goto: end
+
+  data_leak_found:
+    description: "Information disclosure vulnerability found"
+    next:
+      - goto: end
+
+  no_data_leak:
+    description: "No information disclosure detected"
+    next:
+      - goto: end
+
+  auth_failed:
+    description: "Authentication failed"
+    next:
+      - goto: end
+
+  error:
+    description: "Unexpected error occurred"
+    next:
+      - goto: end
+
+  end:
+    description: "Attack flow complete"

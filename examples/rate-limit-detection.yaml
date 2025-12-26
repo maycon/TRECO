@@ -1,0 +1,319 @@
+# ============================================================================
+# TRECO Configuration: Rate Limit Detection and Handling
+# ============================================================================
+#
+# Demonstrates using when blocks to detect and handle rate limiting,
+# including checking rate limit headers and adjusting behavior dynamically.
+#
+# Usage:
+#   treco examples/rate-limit-detection.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Rate Limit Detection"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-770"
+  description: |
+    Uses multi-condition when blocks to detect rate limiting through
+    status codes and rate limit headers, then adjusts attack strategy.
+
+target:
+  host: "api.example.test"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+  http:
+    follow_redirects: false
+
+entrypoint:
+  state: api_request_1
+  input:
+    api_key: "test-api-key-123"
+    request_count: 0
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # --------------------------------------------------------------------------
+  # Normal API Requests
+  # --------------------------------------------------------------------------
+  api_request_1:
+    description: "First API request - check rate limit headers"
+    request: |
+      GET /api/data?page=1 HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ api_key }}
+
+    extract:
+      rate_limit:
+        type: header
+        pattern: "X-Rate-Limit-Limit"
+      rate_remaining:
+        type: header
+        pattern: "X-Rate-Limit-Remaining"
+      rate_reset:
+        type: header
+        pattern: "X-Rate-Limit-Reset"
+
+    next:
+      # Already rate limited
+      - when:
+          - status: 429
+        goto: rate_limited_immediately
+
+      # Approaching rate limit (less than 10 remaining)
+      - when:
+          - status: 200
+          - header_exists: "X-Rate-Limit-Remaining"
+          - header_compare:
+              name: "X-Rate-Limit-Remaining"
+              operator: "<"
+              value: 10
+        goto: approaching_limit
+
+      # Normal response with rate limit info
+      - when:
+          - status: 200
+          - header_exists: "X-Rate-Limit-Remaining"
+        goto: api_request_2
+
+      # No rate limit headers (unlimited or not tracked)
+      - when:
+          - status: 200
+        goto: no_rate_limiting
+
+      - otherwise:
+        goto: error
+
+  api_request_2:
+    description: "Second API request - continue monitoring"
+    request: |
+      GET /api/data?page=2 HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ api_key }}
+
+    extract:
+      rate_remaining:
+        type: header
+        pattern: "X-Rate-Limit-Remaining"
+
+    next:
+      # Hit rate limit
+      - when:
+          - status: 429
+        goto: rate_limited_after_requests
+
+      # Still good, continue
+      - when:
+          - status: 200
+          - header_compare:
+              name: "X-Rate-Limit-Remaining"
+              operator: ">"
+              value: 10
+        goto: api_request_3
+
+      # Approaching limit
+      - when:
+          - status: 200
+        goto: approaching_limit
+
+      - otherwise:
+        goto: error
+
+  api_request_3:
+    description: "Third API request - aggressive testing"
+    request: |
+      GET /api/data?page=3 HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ api_key }}
+
+    extract:
+      rate_remaining:
+        type: header
+        pattern: "X-Rate-Limit-Remaining"
+
+    next:
+      # Hit rate limit
+      - when:
+          - status: 429
+        goto: rate_limited_after_requests
+
+      # Check if retry-after header present
+      - when:
+          - status: 200
+          - header_exists: "Retry-After"
+        goto: rate_limit_warning
+
+      # Normal response
+      - when:
+          - status: 200
+        goto: continue_attack
+
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Rate Limit Handling
+  # --------------------------------------------------------------------------
+  approaching_limit:
+    description: "Detected approaching rate limit"
+    request: |
+      GET /api/rate-limit-info HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ api_key }}
+
+    extract:
+      limit_window:
+        type: jpath
+        pattern: "$.window_seconds"
+      requests_remaining:
+        type: jpath
+        pattern: "$.remaining"
+
+    next:
+      # Very few requests remaining
+      - when:
+          - status: 200
+          - condition: "{{ requests_remaining | int < 5 }}"
+        goto: critical_rate_limit
+
+      # Some requests remaining
+      - when:
+          - status: 200
+        goto: slow_down_attack
+
+      - otherwise:
+        goto: error
+
+  rate_limited_immediately:
+    description: "Rate limited on first request"
+    next:
+      - goto: end
+
+  rate_limited_after_requests:
+    description: "Rate limited after multiple requests"
+    request: |
+      GET /api/status HTTP/1.1
+      Host: {{ target.host }}
+
+    extract:
+      reset_time:
+        type: header
+        pattern: "X-Rate-Limit-Reset"
+
+    next:
+      # Check if we can still access non-auth endpoints
+      - when:
+          - status: 200
+          - body_contains: "healthy"
+        goto: bypass_via_unauth
+
+      - otherwise:
+        goto: end
+
+  rate_limit_warning:
+    description: "Server sent rate limit warning"
+    next:
+      - goto: slow_down_attack
+
+  critical_rate_limit:
+    description: "Critical - very few requests left"
+    next:
+      - goto: end
+
+  # --------------------------------------------------------------------------
+  # Attack Strategy Adjustments
+  # --------------------------------------------------------------------------
+  slow_down_attack:
+    description: "Reduce request rate"
+    request: |
+      GET /api/data?page=4 HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ api_key }}
+
+    next:
+      - when:
+          - status: 200
+        goto: continue_attack
+        delay_ms: 1000
+
+      - when:
+          - status: 429
+        goto: end
+
+      - otherwise:
+        goto: error
+
+  bypass_via_unauth:
+    description: "Attempt to bypass rate limit via unauthenticated endpoints"
+    request: |
+      GET /api/public/data HTTP/1.1
+      Host: {{ target.host }}
+
+    next:
+      # Successful bypass
+      - when:
+          - status: 200
+          - body_not_contains: "rate limit"
+          - body_not_contains: "too many requests"
+        goto: bypass_successful
+
+      # Still rate limited
+      - when:
+          - status: 429
+        goto: bypass_failed
+
+      - otherwise:
+        goto: error
+
+  no_rate_limiting:
+    description: "No rate limiting detected - continue aggressive testing"
+    request: |
+      GET /api/data?page=100 HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ api_key }}
+
+    next:
+      - when:
+          - status: 200
+        goto: aggressive_attack
+
+      - otherwise:
+        goto: error
+
+  continue_attack:
+    description: "Continue with normal attack pace"
+    next:
+      - goto: end
+
+  aggressive_attack:
+    description: "Increase attack intensity"
+    next:
+      - goto: end
+
+  bypass_successful:
+    description: "Successfully bypassed rate limit"
+    next:
+      - goto: end
+
+  bypass_failed:
+    description: "Could not bypass rate limit"
+    next:
+      - goto: end
+
+  # --------------------------------------------------------------------------
+  # Terminal States
+  # --------------------------------------------------------------------------
+  error:
+    description: "Unexpected error occurred"
+    next:
+      - goto: end
+
+  end:
+    description: "Rate limit testing complete"
