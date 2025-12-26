@@ -30,10 +30,10 @@ target:
   tls:
     enabled: false
     verify_cert: false
-  # proxy:
-  #   type: http
-  #   host: 127.0.0.1
-  #   port: 8080
+  proxy:
+    type: http
+    host: 127.0.0.1
+    port: 8080
 
 entrypoint:
   state: auth_login
@@ -205,8 +205,11 @@ states:
         "amount": {{ redeem_amount }}
       }
 
+    options:
+      proxy_bypass: true
+
     race:
-      threads: 2
+      threads: 20
       sync_mechanism: barrier
       connection_strategy: multiplexed
       thread_propagation: single

