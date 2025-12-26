@@ -285,3 +285,35 @@ class TestSchemaValidator:
             validator.validate(valid_config)
         
         assert "timeout" in str(exc_info.value).lower() or "minimum" in str(exc_info.value).lower()
+
+    def test_mtls_client_cert_and_key(self, validator, valid_config):
+        """Test that mTLS with separate cert and key is valid."""
+        valid_config["target"]["tls"]["client_cert"] = "/path/to/client.crt"
+        valid_config["target"]["tls"]["client_key"] = "/path/to/client.key"
+        
+        # Should not raise any exception
+        validator.validate(valid_config)
+
+    def test_mtls_client_cert_key_with_password(self, validator, valid_config):
+        """Test that mTLS with cert, key, and password is valid."""
+        valid_config["target"]["tls"]["client_cert"] = "/path/to/client.crt"
+        valid_config["target"]["tls"]["client_key"] = "/path/to/client.key"
+        valid_config["target"]["tls"]["client_key_password"] = "{{ env('CLIENT_KEY_PASSWORD') }}"
+        
+        # Should not raise any exception
+        validator.validate(valid_config)
+
+    def test_mtls_client_pem(self, validator, valid_config):
+        """Test that mTLS with combined PEM file is valid."""
+        valid_config["target"]["tls"]["client_pem"] = "/path/to/client.pem"
+        
+        # Should not raise any exception
+        validator.validate(valid_config)
+
+    def test_mtls_client_pfx(self, validator, valid_config):
+        """Test that mTLS with PKCS12 file is valid."""
+        valid_config["target"]["tls"]["client_pfx"] = "/path/to/client.pfx"
+        valid_config["target"]["tls"]["client_pfx_password"] = "{{ env('PFX_PASSWORD') }}"
+        
+        # Should not raise any exception
+        validator.validate(valid_config)
