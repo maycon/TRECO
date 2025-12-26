@@ -2263,7 +2263,7 @@ TRECO was built on the shoulders of giants. We'd like to thank:
 
 ## 📊 Project Status
 
-**Current Version**: 1.2.0
+**Current Version**: 1.3.1
 
 **Development Status**: Beta (Production Ready for Authorized Testing)
 
@@ -2282,7 +2282,7 @@ If you use TRECO in academic research or security publications, please cite:
   title = {TRECO: Tactical Race Exploitation \& Concurrency Orchestrator},
   author = {Vitali, Maycon Maia},
   year = {2025},
-  version = {1.2.0},
+  version = {1.3.1},
   url = {https://github.com/maycon/TRECO},
   license = {MIT}
 }
