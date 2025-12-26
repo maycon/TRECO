@@ -337,8 +337,8 @@ except Exception as e:
             EXAMPLES_FOUND=$((EXAMPLES_FOUND + 1))
             echo "Checking $file..."
             
-            # Try to parse with Python YAML
-            if python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>&1; then
+            # Try to parse with Python YAML - properly quote file path
+            if python3 -c "import yaml; import sys; yaml.safe_load(open(sys.argv[1]))" "$file" 2>&1; then
               echo "✓ $file syntax valid"
               EXAMPLES_VALID=$((EXAMPLES_VALID + 1))
             else

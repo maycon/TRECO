@@ -33,7 +33,7 @@ def find_repo_root() -> Path:
     current = Path.cwd()
     
     # Try current directory and parents
-    for parent in [current] + list(current.parents):
+    for parent in [current, *current.parents]:
         if (parent / 'pyproject.toml').exists():
             return parent
     
