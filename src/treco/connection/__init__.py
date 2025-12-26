@@ -33,6 +33,7 @@ CONNECTION_STRATEGIES = {
 def create_connection_strategy(
     strategy_type: str,
     sync: Optional[SyncMechanism] = None,
+    bypass_proxy: bool = False,
 ) -> ConnectionStrategy:
     """
     Factory function to create connection strategy by name.
@@ -40,6 +41,7 @@ def create_connection_strategy(
     Args:
         strategy_type: Type of strategy ("preconnect", "multiplexed", "lazy", "pooled")
         sync: Optional sync mechanism for connection coordination
+        bypass_proxy: Whether to bypass proxy for this strategy
 
     Returns:
         Instance of ConnectionStrategy
@@ -57,6 +59,9 @@ def create_connection_strategy(
         
         # HTTP/2 multiplexed (single connection)
         strategy = create_connection_strategy("multiplexed")
+        
+        # Bypass proxy for race attack
+        strategy = create_connection_strategy("preconnect", bypass_proxy=True)
     """
     if strategy_type not in CONNECTION_STRATEGIES:
         raise ValueError(
@@ -65,7 +70,12 @@ def create_connection_strategy(
         )
 
     strategy_class = CONNECTION_STRATEGIES[strategy_type]
-    return strategy_class(sync=sync)
+    
+    # Pass bypass_proxy only to strategies that support it
+    if strategy_type in ("preconnect", "multiplexed"):
+        return strategy_class(sync=sync, bypass_proxy=bypass_proxy)
+    else:
+        return strategy_class(sync=sync)
 
 
 __all__ = [

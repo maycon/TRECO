@@ -32,6 +32,7 @@ class PreconnectStrategy(ConnectionStrategy):
         - True persistent connections
         - Clean prepare/send separation
         - Proper TLS certificate verification control
+        - Proxy support with bypass option
     
     Example:
         strategy = PreconnectStrategy(sync=BarrierSync())
@@ -45,7 +46,7 @@ class PreconnectStrategy(ConnectionStrategy):
         response = client.send(request)
     """
 
-    def __init__(self, sync: Optional[SyncMechanism] = None, http2: bool = False):
+    def __init__(self, sync: Optional[SyncMechanism] = None, http2: bool = False, bypass_proxy: bool = False):
         """
         Initialize the preconnect strategy.
         
@@ -54,6 +55,7 @@ class PreconnectStrategy(ConnectionStrategy):
             http2: Whether to use HTTP/2 (default: False for better race timing)
                    HTTP/1.1 creates separate connections per thread which
                    gives more reliable parallel request timing.
+            bypass_proxy: Whether to bypass proxy for this strategy
         """
         super().__init__(sync)
         self._clients: Dict[int, httpx.Client] = {}
@@ -68,6 +70,7 @@ class PreconnectStrategy(ConnectionStrategy):
         self._use_http2: bool = http2
         self._timeout: float = 30.0
         self._follow_redirects: bool = False
+        self._bypass_proxy: bool = bypass_proxy
 
     def _prepare(self, num_threads: int, http_client) -> None:
         """
@@ -117,6 +120,11 @@ class PreconnectStrategy(ConnectionStrategy):
                 max_connections=1,
                 keepalive_expiry=30.0
             )
+
+            # Respect bypass_proxy flag
+            proxies = None
+            if not self._bypass_proxy and self._proxy:
+                proxies = self._proxy.to_client_proxy()
             
             client = httpx.Client(
                 http2=self._use_http2,
@@ -125,7 +133,7 @@ class PreconnectStrategy(ConnectionStrategy):
                 base_url=self._base_url,
                 follow_redirects=self._follow_redirects,
                 limits=limits,
-                proxy=self._proxy.to_client_proxy() if self._proxy else None,
+                proxy=proxies
             )
             
             # Force TCP/TLS connection establishment
