@@ -1087,8 +1087,8 @@ Create minimal config that reproduces the issue:
      tls:
        enabled: true
    
-   entrypoints:
-     - state: test
+   entrypoint:
+     state: test
    
    states:
      test:

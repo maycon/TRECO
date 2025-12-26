@@ -228,11 +228,11 @@ Here's a simple example of a race condition test for a fund redemption vulnerabi
      tls:
        enabled: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "testuser"
-         password: "testpass"
+   entrypoint:
+     state: login
+     input:
+       username: "testuser"
+       password: "testpass"
 
    states:
      login:
@@ -419,7 +419,7 @@ Execution Flow
 ~~~~~~~~~~~~~~
 
 1. **Configuration Loading**: Parse YAML attack definition and validate structure
-2. **State Initialization**: Set up initial state with variables from entrypoints
+2. **State Initialization**: Set up initial state with variables from entrypoint
 3. **State Execution**: Execute states sequentially according to transition rules
 4. **Race Coordination**: Synchronize threads for race attacks using selected mechanism
 5. **Request Dispatch**: Send HTTP requests simultaneously for optimal timing

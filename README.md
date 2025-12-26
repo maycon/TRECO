@@ -203,9 +203,9 @@ config:
   tls:
     enabled: true
 
-entrypoints:
-  - state: test
-    input: {}
+entrypoint:
+  state: test
+  input: {}
 
 states:
   test:
@@ -252,11 +252,11 @@ config:
     enabled: true
     verify_cert: true
 
-entrypoints:
-  - state: login
-    input:
-      username: "testuser"
-      password: "testpass"
+entrypoint:
+  state: login
+  input:
+    username: "testuser"
+    password: "testpass"
 
 states:
   login:
@@ -522,10 +522,10 @@ config:
       username: string      # Proxy username
       password: string      # Proxy password
 
-entrypoints:
-  - state: string           # Starting state name
-    input:                  # Initial variables (key-value pairs)
-      key: value
+entrypoint:
+  state: string           # Starting state name
+  input:                  # Initial variables (key-value pairs)
+    key: value
 
 states:
   state_name:
@@ -994,11 +994,11 @@ config:
   tls:
     enabled: true
 
-entrypoints:
-  - state: get_token
-    input:
-      card_number: "4111111111111111"
-      amount: 1000
+entrypoint:
+  state: get_token
+  input:
+    card_number: "4111111111111111"
+    amount: 1000
 
 states:
   get_token:
@@ -1067,11 +1067,11 @@ config:
   tls:
     enabled: true
 
-entrypoints:
-  - state: login
-    input:
-      username: "{{ argv('user', 'testuser') }}"
-      password: "{{ argv('pass', 'testpass') }}"
+entrypoint:
+  state: login
+  input:
+    username: "{{ argv('user', 'testuser') }}"
+    password: "{{ argv('pass', 'testpass') }}"
 
 states:
   login:
@@ -1165,12 +1165,12 @@ config:
   tls:
     enabled: true
 
-entrypoints:
-  - state: login
-    input:
-      username: "{{ argv('user') }}"
-      password: "{{ argv('pass') }}"
-      totp_seed: "{{ env('TOTP_SEED') }}"
+entrypoint:
+  state: login
+  input:
+    username: "{{ argv('user') }}"
+    password: "{{ argv('pass') }}"
+    totp_seed: "{{ env('TOTP_SEED') }}"
 
 states:
   login:
@@ -1235,10 +1235,10 @@ config:
   tls:
     enabled: true
 
-entrypoints:
-  - state: authenticate
-    input:
-      api_key: "{{ env('API_KEY') }}"
+entrypoint:
+  state: authenticate
+  input:
+    api_key: "{{ env('API_KEY') }}"
 
 states:
   authenticate:

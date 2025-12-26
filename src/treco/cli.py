@@ -1,235 +1,176 @@
-"""
-Command-line interface for TRECO.
+import click
+import os
+import json
+from typing import Dict, Any, List, Tuple
 
-Provides a user-friendly CLI for running race condition attacks.
-"""
+from treco import RaceCoordinator
+from treco.logging import get_logger, setup_logging
+from treco.console import Colors, error, print_banner, success, warning
 
-import argparse
-import sys
-import traceback
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-from .console import Colors, error, print_banner, success, warning
-from .logging import LOG_LEVEL_NAMES, get_logger, setup_logging
-from .orchestrator import RaceCoordinator
-
-__version__ = "1.0.0"
-
-
-@dataclass
-class CLIConfig:
-    """Parsed CLI configuration."""
-
-    config_path: Path
-    log_level: str
-    show_banner: bool
-    cli_args: Dict[str, Any]
-
-
-def create_parser() -> argparse.ArgumentParser:
-    """Create and configure argument parser."""
-    parser = argparse.ArgumentParser(
-        prog="treco",
-        description="TRECO - Tactical Race Exploitation & Concurrency Orchestrator",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Basic usage
-  treco attack.yaml --user alice --seed JBSWY3DPEHPK3PXP
-  
-  # With custom thread count
-  treco attack.yaml --user alice --threads 50
-  
-  # Using environment variables for sensitive data
-  export PASSWORD='secret'
-  treco attack.yaml --user alice
-  
-  # Verbose output (debug level)
-  treco attack.yaml --user alice -v
-  
-  # Custom log level
-  treco attack.yaml --user alice --log-level info
-
-Documentation: https://treco.readthedocs.io
-        """,
-    )
-
-    # Positional arguments
-    parser.add_argument(
-        "config",
-        type=str,
-        metavar="CONFIG_FILE",
-        help="Path to YAML configuration file",
-    )
-
-    # Authentication options
-    auth_group = parser.add_argument_group("Authentication")
-    auth_group.add_argument(
-        "--user", "-u",
-        type=str,
-        metavar="USERNAME",
-        help="Username for authentication",
-    )
-    auth_group.add_argument(
-        "--password", "-p",
-        type=str,
-        metavar="PASSWORD",
-        help="Password (prefer env var PASSWORD for security)",
-    )
-    auth_group.add_argument(
-        "--seed", "-s",
-        type=str,
-        metavar="TOTP_SEED",
-        help="TOTP seed for 2FA generation",
-    )
-
-    # Target options
-    target_group = parser.add_argument_group("Target")
-    target_group.add_argument(
-        "--host", "-H",
-        type=str,
-        metavar="HOSTNAME",
-        help="Override target hostname",
-    )
-    target_group.add_argument(
-        "--port", "-P",
-        type=int,
-        metavar="PORT",
-        help="Override target port",
-    )
-
-    # Execution options
-    exec_group = parser.add_argument_group("Execution")
-    exec_group.add_argument(
-        "--threads", "-t",
-        type=int,
-        metavar="COUNT",
-        help="Number of concurrent threads for race attack",
-    )
-
-    # Output options
-    output_group = parser.add_argument_group("Output")
-    output_group.add_argument(
-        "--log-level", "-l",
-        type=str,
-        choices=list(LOG_LEVEL_NAMES.keys()),
-        default="quiet",
-        metavar="LEVEL",
-        help="Log verbosity: quiet, critical, error, warning, info, debug (default: quiet)",
-    )
-    output_group.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose output (shortcut for --log-level debug)",
-    )
-    output_group.add_argument(
-        "--no-banner",
-        action="store_true",
-        help="Suppress banner output",
-    )
-
-    # Info options
-    parser.add_argument(
-        "--version", "-V",
-        action="version",
-        version=f"%(prog)s {__version__}",
-    )
-
-    return parser
+def parse_set_value(value: str) -> Any:
+    """Parse a --set value, handling special prefixes."""
+    
+    # File reference: @filename
+    if value.startswith('@'):
+        filepath = value[1:]
+        with open(filepath, 'r') as f:
+            # Return list of lines for wordlist-style files
+            lines = [line.strip() for line in f if line.strip()]
+            return lines if len(lines) > 1 else lines[0] if lines else ""
+    
+    # Environment variable: $VAR or ${VAR}
+    if value.startswith('$'):
+        var_name = value[1:].strip('{}')
+        return os.environ.get(var_name, '')
+    
+    # JSON: starts with { or [
+    if value.startswith(('{', '[')):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            pass
+    
+    # # Comma-separated list
+    # if ',' in value and not value.startswith('"'):
+    #     return [v.strip() for v in value.split(',')]
+    
+    # Boolean
+    if value.lower() in ('true', 'yes', '1'):
+        return True
+    if value.lower() in ('false', 'no', '0'):
+        return False
+    
+    # Integer
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    
+    # Float
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    
+    # String (default)
+    return value
 
 
-def validate_config_path(config_path: str) -> Path:
-    """
-    Validate that configuration file exists and is readable.
+def parse_set_option(ctx, param, values: Tuple[str, ...]) -> Dict[str, Any]:
+    """Parse multiple --set key=value options."""
+    result = {}
+    
+    for item in values:
+        if '=' not in item:
+            raise click.BadParameter(f"Invalid format: '{item}'. Use key=value")
+        
+        key, value = item.split('=', 1)
+        key = key.strip()
+        
+        # Handle type hints: key:type=value
+        type_hint = None
+        if ':' in key:
+            key, type_hint = key.rsplit(':', 1)
+        
+        parsed_value = parse_set_value(value)
+        
+        # Apply type hint if specified
+        if type_hint:
+            parsed_value = apply_type_hint(parsed_value, type_hint)
+        
+        # Handle nested keys: config.host -> {"config": {"host": value}}
+        if '.' in key:
+            parts = key.split('.')
+            current = result
+            for part in parts[:-1]:
+                current = current.setdefault(part, {})
+            current[parts[-1]] = parsed_value
+        else:
+            result[key] = parsed_value
+    
+    return result
 
-    Args:
-        config_path: Path to configuration file
 
-    Returns:
-        Validated Path object
-
-    Raises:
-        SystemExit: If validation fails
-    """
-    path = Path(config_path)
-
-    if not path.exists():
-        print(error(f"Configuration file not found: {config_path}"), file=sys.stderr)
-        sys.exit(1)
-
-    if not path.is_file():
-        print(error(f"Path is not a file: {config_path}"), file=sys.stderr)
-        sys.exit(1)
-
-    if path.suffix.lower() not in (".yaml", ".yml"):
-        print(warning(f"File does not have .yaml/.yml extension: {config_path}"), file=sys.stderr)
-
-    return path
-
-
-def build_cli_args(args: argparse.Namespace) -> Dict[str, Any]:
-    """
-    Build CLI arguments dictionary from parsed arguments.
-
-    Args:
-        args: Parsed argument namespace
-
-    Returns:
-        Dictionary of non-None CLI arguments
-    """
-    arg_mapping = {
-        "user": args.user,
-        "password": args.password,
-        "seed": args.seed,
-        "threads": args.threads,
-        "host": args.host,
-        "port": args.port,
+def apply_type_hint(value: Any, type_hint: str) -> Any:
+    """Apply type hint to value."""
+    type_map = {
+        'int': int,
+        'float': float,
+        'bool': lambda v: str(v).lower() in ('true', 'yes', '1'),
+        'str': str,
+        'list': lambda v: v if isinstance(v, list) else [v],
+        'json': json.loads if isinstance(value, str) else lambda v: v,
     }
+    
+    converter = type_map.get(type_hint.lower())
+    if converter:
+        return converter(value)
+    return value
 
-    return {k: v for k, v in arg_mapping.items() if v is not None}
 
-
-def parse_args(argv: Optional[List[str]] = None) -> CLIConfig:
+@click.command()
+@click.argument('config_file', type=click.Path(exists=True))
+@click.option(
+    '--set', '-s',
+    'variables',
+    multiple=True,
+    callback=parse_set_option,
+    help='Set input variable (key=value). Can be used multiple times.'
+)
+@click.option(
+    '--log-level', '-l',
+    type=click.Choice(['quiet', 'error', 'warning', 'info', 'debug']),
+    default='warning',
+    help='Log level'
+)
+@click.option(
+    '--no-banner',
+    is_flag=True,
+    help='Disable banner output'
+)
+def main(config_file: str, variables: Dict[str, Any], log_level: str, 
+         no_banner: bool):
     """
-    Parse command-line arguments.
-
-    Args:
-        argv: Argument list (defaults to sys.argv)
-
-    Returns:
-        Parsed CLI configuration
+    TRECO - Tactical Race Exploitation & Concurrency Orchestrator
+    
+    Execute race condition attacks defined in CONFIG_FILE.
+    
+    \b
+    Examples:
+        treco attack.yaml
+        treco attack.yaml --set username=carlos --set password=secret
+        treco attack.yaml -s threads=50 -s host=target.com
+        treco attack.yaml --set passwords=@wordlist.txt
     """
-    parser = create_parser()
-    args = parser.parse_args(argv)
+    
+    # Setup logging with configured level
+    setup_logging(log_level)
+    logger = get_logger()
 
-    # Validate config file
-    config_path = validate_config_path(args.config)
+    # Print banner (unless suppressed)
+    if not no_banner:
+        print_banner()
+    
+    results = run_attack(config_file, variables)
+    return results
 
-    # Resolve log level (--verbose overrides --log-level)
-    log_level = "debug" if args.verbose else args.log_level
-
-    # Determine if banner should be shown
-    show_banner = not args.no_banner and log_level != "debug"
-
-    # Build CLI args dict
-    cli_args = build_cli_args(args)
-
-    return CLIConfig(
-        config_path=config_path,
-        log_level=log_level,
-        show_banner=show_banner,
-        cli_args=cli_args,
-    )
+def print_banner():
+    """Print TRECO banner."""
+    click.echo("""
+╔═══════════════════════════════════════════════════════════╗
+║  🦎 TRECO - Tactical Race Exploitation & Concurrency      ║
+║                    Orchestrator                           ║
+╚═══════════════════════════════════════════════════════════╝
+    """)
 
 
-def run_attack(config: CLIConfig) -> int:
+def run_attack(config_path: str, variables: Dict[str, Any]) -> int:
     """
     Execute the race condition attack.
 
     Args:
-        config: CLI configuration
+        config_path: Path to configuration file
+        variables: Input variables for the attack
 
     Returns:
         Exit code (0 for success, non-zero for failure)
@@ -238,7 +179,7 @@ def run_attack(config: CLIConfig) -> int:
 
     try:
         # Create and run coordinator
-        coordinator = RaceCoordinator(str(config.config_path), config.cli_args)
+        coordinator = RaceCoordinator(config_path, variables)
         results = coordinator.run()
 
         # Success output
@@ -252,49 +193,10 @@ def run_attack(config: CLIConfig) -> int:
         return 130
 
     except Exception as e:
+        import sys, traceback
         print(f"\n{error(f'Attack failed: {e}')}", file=sys.stderr)
         logger.debug(traceback.format_exc())
         return 1
 
-
-def main(argv: Optional[List[str]] = None) -> int:
-    """
-    Main CLI entry point.
-
-    Args:
-        argv: Argument list (defaults to sys.argv)
-
-    Returns:
-        Exit code
-    """
-    # Parse arguments first (before setting up logging)
-    try:
-        config = parse_args(argv)
-    except SystemExit as e:
-        return e.code if e.code is not None else 1
-
-    # Setup logging with configured level
-    setup_logging(config.log_level)
-    logger = get_logger()
-
-    # Print banner (unless suppressed)
-    if config.show_banner:
-        print_banner()
-
-    # Log startup info
-    logger.info(f"Loading configuration: {config.config_path}")
-    if config.cli_args:
-        safe_args = {k: "***" if k == "password" else v for k, v in config.cli_args.items()}
-        logger.debug(f"CLI overrides: {safe_args}")
-
-    # Run attack
-    return run_attack(config)
-
-
-def cli() -> None:
-    """Entry point for setuptools console script."""
-    sys.exit(main())
-
-
-if __name__ == "__main__":
-    cli()
+if __name__ == '__main__':
+    main()

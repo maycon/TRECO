@@ -66,7 +66,7 @@ class StateMachine:
             ValueError: If state not found or invalid transition
         """
         # Initialize entrypoint variables
-        entrypoint = self.config.entrypoints[0]
+        entrypoint = self.config.entrypoint
         self._initialize_variables(entrypoint.input)
 
         # Start from entrypoint state
@@ -86,7 +86,7 @@ class StateMachine:
             self.history.append(state_name)
 
             context_input = self.context.to_dict()
-            context_input["config"] = self.config.config
+            context_input["target"] = self.config.target
 
             state_description: str = self.engine.render(
                 state.description,
@@ -96,10 +96,12 @@ class StateMachine:
 
             logger.info(f"\n[StateMachine] Executing state: {state_name}")
             logger.info(f"[StateMachine] Description: {state_description}")
-
+            
             if state.logger.on_state_enter:
+                
                 context_input = self.context.to_dict()
-                context_input["config"] = self.config.config
+                context_input["target"] = self.config.target
+                
 
                 logger_output = self.engine.render(
                     state.logger.on_state_enter,
@@ -118,7 +120,7 @@ class StateMachine:
 
             if state.logger.on_state_leave:
                 context_input = self.context.to_dict()
-                context_input["config"] = self.config.config
+                context_input["target"] = self.config.target
                 context_input["response"] = asdict(result)
 
                 logger_output = self.engine.render(

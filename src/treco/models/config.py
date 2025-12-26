@@ -5,12 +5,17 @@ These classes represent the structure of the YAML configuration file,
 providing type safety and validation.
 """
 
+from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any
 
+@dataclass
+class BaseConfig(ABC):
+    """Base configuration class."""
+    pass
 
 @dataclass
-class Metadata:
+class Metadata(BaseConfig):
     """
     Metadata about the attack scenario.
 
@@ -26,9 +31,8 @@ class Metadata:
     author: str
     vulnerability: str
 
-
 @dataclass
-class TLSConfig:
+class TLSConfig(BaseConfig):
     """
     TLS/SSL configuration.
 
@@ -50,6 +54,7 @@ class HTTPConfig:
     """
 
     follow_redirects: bool = True
+    timeout: int = 10  # in seconds
 
 @dataclass
 class ProxyAuth:
@@ -93,7 +98,7 @@ class ProxyConfig:
         return proxy_url
 
 @dataclass
-class ServerConfig:
+class TargetConfig(BaseConfig):
     """
     Target server configuration.
 
@@ -116,7 +121,7 @@ class ServerConfig:
 
 
 @dataclass
-class Entrypoint:
+class Entrypoint(BaseConfig):
     """
     Defines the initial state and variables for execution.
 
@@ -230,21 +235,21 @@ class State:
 
 
 @dataclass
-class Config:
+class Config(BaseConfig):
     """
     Root configuration object representing the entire YAML file.
 
     This is the top-level structure that contains all attack configuration,
-    including metadata, server settings, states, and entrypoints.
+    including metadata, server settings, states, and entrypoint.
 
     Attributes:
         metadata: Attack metadata (name, version, author, vulnerability)
         config: Server and execution configuration
-        entrypoints: List of possible entry points (usually just one)
+        entrypoint: Initial state and input variables
         states: Dictionary mapping state names to State objects
     """
 
     metadata: Metadata
-    config: ServerConfig
-    entrypoints: List[Entrypoint]
+    target: TargetConfig
+    entrypoint: Entrypoint
     states: Dict[str, State]

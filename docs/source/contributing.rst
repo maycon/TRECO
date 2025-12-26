@@ -12,7 +12,7 @@ A complete TRECO configuration file consists of four main sections:
 
    metadata:      # Attack metadata
    config:        # Server and execution settings
-   entrypoints:   # Starting points
+   entrypoint:    # Starting point
    states:        # State definitions
 
 Metadata Section
@@ -362,19 +362,19 @@ Here's a complete configuration with all options:
          username: "{{ env('PROXY_USER') }}"
          password: "{{ env('PROXY_PASS') }}"
 
-Entrypoints Section
+Entrypoint Section
 -------------------
 
-The ``entrypoints`` section defines starting points for execution.
+The ``entrypoint`` section defines starting points for execution.
 
 .. code-block:: yaml
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ argv('user', 'testuser') }}"
-         password: "{{ env('PASSWORD') }}"
-         api_key: "{{ env('API_KEY') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ argv('user', 'testuser') }}"
+       password: "{{ env('PASSWORD') }}"
+       api_key: "{{ env('API_KEY') }}"
 
 **Fields:**
 
@@ -391,25 +391,6 @@ The ``entrypoints`` section defines starting points for execution.
    * - ``input``
      - No
      - Initial variables (supports templates)
-
-**Multiple Entrypoints**
-
-You can define multiple entrypoints to run different attack scenarios:
-
-.. code-block:: yaml
-
-   entrypoints:
-     - state: test_user_flow
-       input:
-         username: "user1"
-     
-     - state: test_admin_flow
-       input:
-         username: "admin"
-         elevated: true
-
-.. note::
-   Currently, TRECO executes only the first entrypoint. Multiple entrypoints are reserved for future functionality.
 
 States Section
 --------------
@@ -819,11 +800,11 @@ Here's a complete configuration example with all features:
          username: "{{ env('PROXY_USER') }}"
          password: "{{ env('PROXY_PASS') }}"
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ argv('user', 'testuser') }}"
-         password: "{{ env('PASSWORD', 'testpass') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ argv('user', 'testuser') }}"
+       password: "{{ env('PASSWORD', 'testpass') }}"
 
    states:
      login:

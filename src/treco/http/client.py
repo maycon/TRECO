@@ -11,7 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from treco.models import ServerConfig
+from treco.models import TargetConfig
 from treco.http.parser import HTTPParser
 
 
@@ -40,7 +40,7 @@ class HTTPClient:
         print(response.status_code)  # 200
     """
 
-    def __init__(self, config: ServerConfig, http2: bool = False):
+    def __init__(self, target: TargetConfig, http2: bool = False):
         """
         Initialize HTTP client with server configuration.
 
@@ -48,13 +48,13 @@ class HTTPClient:
             config: Server configuration (host, port, TLS settings)
             http2: Whether to use HTTP/2 (default: False for compatibility)
         """
-        self.config = config
+        self.config = target
         self.parser = HTTPParser()
         self._http2 = http2
 
         # Build base URL
-        scheme = "https" if config.tls.enabled else "http"
-        self.base_url = f"{scheme}://{config.host}:{config.port}"
+        scheme = "https" if target.tls.enabled else "http"
+        self.base_url = f"{scheme}://{target.host}:{target.port}"
 
         # Create client with connection pooling
         self.client = self._create_client()

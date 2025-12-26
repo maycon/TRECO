@@ -174,12 +174,12 @@ Access environment variables with optional default values.
 
 .. code-block:: yaml
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ env('USERNAME', 'testuser') }}"
-         password: "{{ env('PASSWORD') }}"
-         api_key: "{{ env('API_KEY', 'demo_key') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ env('USERNAME', 'testuser') }}"
+       password: "{{ env('PASSWORD') }}"
+       api_key: "{{ env('API_KEY', 'demo_key') }}"
 
 CLI Arguments (argv)
 ~~~~~~~~~~~~~~~~~~~~
@@ -199,11 +199,11 @@ Access command-line arguments passed to TRECO.
 .. code-block:: yaml
 
    # In YAML
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ argv('user', 'testuser') }}"
-         thread_count: "{{ argv('threads', '10') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ argv('user', 'testuser') }}"
+       thread_count: "{{ argv('threads', '10') }}"
    
    # Run with:
    # treco attack.yaml --user alice --threads 20
