@@ -1,0 +1,216 @@
+metadata:
+  name: "JWT Token Security Analysis"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-287"
+
+target:
+  host: "api.example.com"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: true
+
+entrypoint:
+  state: login
+  input:
+    username: "testuser"
+    password: "testpass123"
+
+states:
+  login:
+    description: "Authenticate and obtain JWT token"
+    request: |
+      POST /api/auth/login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {
+        "username": "{{ username }}",
+        "password": "{{ password }}"
+      }
+    
+    extract:
+      # Extract the JWT access token from response
+      access_token:
+        type: jpath
+        pattern: "$.access_token"
+      
+      # Extract the refresh token
+      refresh_token:
+        type: jpath
+        pattern: "$.refresh_token"
+    
+    next:
+      - on_status: 200
+        goto: analyze_access_token
+      - otherwise:
+        goto: end
+
+  analyze_access_token:
+    description: "Analyze JWT access token structure and claims"
+    # No request needed - just analyzing the token
+    request: |
+      GET /api/user/profile HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ access_token }}
+    
+    extract:
+      # Extract user information from JWT
+      user_id:
+        type: jwt
+        source: "{{ access_token }}"
+        claim: sub
+      
+      user_role:
+        type: jwt
+        source: "{{ access_token }}"
+        claim: role
+      
+      user_email:
+        type: jwt
+        source: "{{ access_token }}"
+        claim: email
+        default: "no_email"
+      
+      permissions:
+        type: jwt
+        source: "{{ access_token }}"
+        claim: permissions
+        default: []
+      
+      # Extract token metadata
+      token_expiry:
+        type: jwt
+        source: "{{ access_token }}"
+        claim: exp
+      
+      issued_at:
+        type: jwt
+        source: "{{ access_token }}"
+        claim: iat
+      
+      # Get entire payload for analysis
+      full_payload:
+        type: jwt
+        source: "{{ access_token }}"
+        part: payload
+      
+      # Get header to check algorithm
+      jwt_header:
+        type: jwt
+        source: "{{ access_token }}"
+        part: header
+      
+      # Security checks
+      algorithm:
+        type: jwt
+        source: "{{ access_token }}"
+        check: algorithm
+      
+      is_expired:
+        type: jwt
+        source: "{{ access_token }}"
+        check: expired
+      
+      is_valid:
+        type: jwt
+        source: "{{ access_token }}"
+        check: valid
+    
+    logger:
+      on_state_leave: |
+        ==========================================
+        JWT TOKEN ANALYSIS
+        ==========================================
+        
+        User Information:
+        - User ID: {{ user_id }}
+        - Role: {{ user_role }}
+        - Email: {{ user_email }}
+        - Permissions: {{ permissions }}
+        
+        Token Metadata:
+        - Algorithm: {{ algorithm }}
+        - Issued At: {{ issued_at }}
+        - Expires At: {{ token_expiry }}
+        - Is Expired: {{ is_expired }}
+        - Is Valid: {{ is_valid }}
+        
+        Security Analysis:
+        {% if algorithm == 'none' %}
+        🚨 CRITICAL VULNERABILITY DETECTED!
+           Token uses 'none' algorithm - signature bypass possible!
+        {% elif algorithm == 'HS256' %}
+        ⚠️  WARNING: Token uses symmetric algorithm (HS256)
+           - Vulnerable to key confusion attacks
+           - Server must protect secret key
+        {% elif algorithm == 'RS256' %}
+        ✅ Good: Token uses asymmetric algorithm (RS256)
+        {% endif %}
+        
+        {% if is_expired %}
+        🚨 VULNERABILITY: Expired token is still accepted!
+           - Token expired at {{ token_expiry }}
+           - Server not validating expiration
+        {% else %}
+        ✅ Token expiration is valid
+        {% endif %}
+        
+        {% if user_role == 'admin' %}
+        🎯 HIGH-VALUE TARGET: Admin privileges detected!
+        {% endif %}
+        
+        ==========================================
+    
+    next:
+      - when:
+          - condition: "{{ algorithm == 'none' }}"
+        goto: exploit_none_algorithm
+      - when:
+          - condition: "{{ algorithm == 'HS256' }}"
+        goto: test_key_confusion
+      - otherwise:
+        goto: test_token_manipulation
+
+  exploit_none_algorithm:
+    description: "Test JWT 'none' algorithm bypass"
+    logger:
+      on_state_enter: |
+        🔍 Testing JWT 'none' algorithm vulnerability...
+        
+        The 'none' algorithm allows unsigned JWTs, which can be
+        exploited to bypass authentication by crafting fake tokens.
+    next:
+      - goto: end
+
+  test_key_confusion:
+    description: "Test HS256 key confusion attack"
+    logger:
+      on_state_enter: |
+        🔍 Testing HS256 key confusion attack...
+        
+        If server uses asymmetric verification (public key) but
+        accepts HS256, attacker can sign tokens using public key
+        as HMAC secret.
+    next:
+      - goto: end
+
+  test_token_manipulation:
+    description: "Test JWT token manipulation"
+    logger:
+      on_state_enter: |
+        🔍 Testing JWT token manipulation...
+        
+        Attempting to modify claims and re-sign the token to
+        escalate privileges or impersonate other users.
+    next:
+      - goto: end
+
+  end:
+    description: "Analysis completed"
+    logger:
+      on_state_enter: |
+        ==========================================
+        JWT SECURITY ANALYSIS COMPLETE
+        ==========================================
