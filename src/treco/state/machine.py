@@ -279,4 +279,3 @@ class StateMachine:
                 return transition
         
         return None
-        return None
