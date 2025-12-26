@@ -324,6 +324,7 @@ except Exception as e:
           EXAMPLES_FOUND=0
           EXAMPLES_VALID=0
           EXAMPLES_INVALID=0
+          VALIDATION_FAILED=false
           
           # Check if examples directory exists
           if [ ! -d "examples" ]; then
@@ -343,6 +344,7 @@ except Exception as e:
             else
               echo "✗ $file syntax invalid"
               EXAMPLES_INVALID=$((EXAMPLES_INVALID + 1))
+              VALIDATION_FAILED=true
             fi
           done < <(find examples -name "*.yaml" -o -name "*.yml")
           
@@ -350,7 +352,7 @@ except Exception as e:
           echo ""
           echo "Summary: Found $EXAMPLES_FOUND examples, $EXAMPLES_VALID valid, $EXAMPLES_INVALID invalid"
           
-          if [ $EXAMPLES_INVALID -gt 0 ]; then
+          if [ "$VALIDATION_FAILED" = true ]; then
             echo "❌ Some examples have invalid syntax"
             exit 1
           elif [ $EXAMPLES_FOUND -eq 0 ]; then

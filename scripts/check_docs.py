@@ -9,11 +9,9 @@ Usage:
     # From repository root
     python scripts/check_docs.py
     
-    # From any directory
-    cd /path/to/treco
+    # From any directory (script auto-detects repo root)
+    cd /path/to/treco/subdirectory
     python scripts/check_docs.py
-
-Note: This script must be run from the repository root directory.
 """
 
 import os

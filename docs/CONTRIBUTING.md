@@ -402,10 +402,16 @@ You can manually trigger the workflow from GitHub Actions tab:
 Periodically run all examples to ensure they still work:
 
 ```bash
-# Test all YAML examples
+# Test all YAML examples for syntax validity
 for file in examples/**/*.yaml; do
   echo "Testing $file..."
-  python -m treco "$file" --validate-only || echo "❌ $file failed"
+  python3 -c "import yaml; yaml.safe_load(open('$file'))" || echo "❌ $file failed"
+done
+
+# For full validation with TRECO (if examples have working configs)
+for file in examples/**/*.yaml; do
+  echo "Testing $file..."
+  python -m treco "$file" || echo "❌ $file failed"
 done
 ```
 
