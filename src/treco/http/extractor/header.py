@@ -5,7 +5,7 @@ Extracts data from HTTP response headers.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
@@ -21,7 +21,7 @@ class HeaderExtractor(BaseExtractor):
     Registered as 'header' with aliases 'headers' and 'http_header'.
     """
 
-    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[Any]:
+    def extract(self, response: ResponseProtocol, pattern: str, context: Optional[Dict] = None) -> Optional[Any]:
         """
         Extract data from response headers.
 

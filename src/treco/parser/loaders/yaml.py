@@ -215,10 +215,23 @@ class YAMLLoader:
             # The default is regex if string.
             return ExtractPattern(pattern_type="regex", pattern_data=data)
         elif isinstance(data, dict):
-            # Build from dict with type and pattern.
-            return ExtractPattern(
-                pattern_type=data.get("type", ""), pattern_data=data.get("pattern", "")
-            )
+            # Get the extractor type
+            pattern_type = data.get("type", "")
+            
+            # For JWT and other complex extractors, pass the entire dict as pattern_data
+            # For simple extractors, just use the 'pattern' field
+            if pattern_type == "jwt":
+                # JWT extractor uses the entire config dict
+                return ExtractPattern(
+                    pattern_type=pattern_type, 
+                    pattern_data=data
+                )
+            else:
+                # Simple extractors use just the pattern field
+                return ExtractPattern(
+                    pattern_type=pattern_type, 
+                    pattern_data=data.get("pattern", "")
+                )
         else:
             raise ValueError(f"Invalid extract pattern format: {data}")
 

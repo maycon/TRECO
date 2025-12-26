@@ -5,7 +5,7 @@ Extracts data from XML/HTML responses using XPath expressions.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from lxml import etree # type: ignore
 
 from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
@@ -22,7 +22,7 @@ class XPathExtractor(BaseExtractor):
     Registered as 'xpath' with aliases 'xml_path' and 'html_path'.
     """
 
-    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[Any]:
+    def extract(self, response: ResponseProtocol, pattern: str, context: Optional[Dict] = None) -> Optional[Any]:
         """
         Extract data from response using XPath expression.
 

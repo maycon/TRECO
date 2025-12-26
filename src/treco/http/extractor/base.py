@@ -39,13 +39,14 @@ class BaseExtractor(ABC):
     _extractor_aliases: List[str] = []
 
     @abstractmethod
-    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[str]:
+    def extract(self, response: ResponseProtocol, pattern: Any, context: Optional[Dict[str, Any]] = None) -> Optional[Any]:
         """
         Extract data from the HTTP response.
 
         Args:
             response: HTTP response object (httpx.Response or compatible)
-            pattern: Extraction pattern
+            pattern: Extraction pattern (string or dict for complex extractors)
+            context: Optional execution context for accessing variables
 
         Returns:
             Extracted value or None

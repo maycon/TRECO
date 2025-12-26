@@ -5,7 +5,7 @@ Extracts cookie values from HTTP response Set-Cookie headers.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
@@ -22,7 +22,7 @@ class CookieExtractor(BaseExtractor):
     Registered as 'cookie' with aliases 'cookies', 'set_cookie', and 'set-cookie'.
     """
 
-    def extract(self, response: ResponseProtocol, pattern: str) -> Optional[Any]:
+    def extract(self, response: ResponseProtocol, pattern: str, context: Optional[Dict] = None) -> Optional[Any]:
         """
         Extract cookie value from response.
 

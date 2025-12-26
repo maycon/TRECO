@@ -38,6 +38,7 @@ dependencies = [
     "jsonpath-ng>=1.6.0",
     "lxml>=5.0.0",
     "jsonschema>=4.0.0",
+    "pyjwt>=2.8.0",
 ]
 
 [project.optional-dependencies]
