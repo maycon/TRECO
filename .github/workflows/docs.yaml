@@ -41,6 +41,8 @@ jobs:
   detect-changes:
     name: Detect API and Feature Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       has_src_changes: ${{ steps.changes.outputs.has_src_changes }}
       has_doc_changes: ${{ steps.changes.outputs.has_doc_changes }}
@@ -127,6 +129,8 @@ jobs:
     name: Validate Documentation
     runs-on: ubuntu-latest
     needs: detect-changes
+    permissions:
+      contents: read
     
     steps:
       - uses: actions/checkout@v4
@@ -182,6 +186,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.has_src_changes == 'true'
+    permissions:
+      contents: read
     
     steps:
       - uses: actions/checkout@v4
@@ -267,6 +273,9 @@ except Exception as e:
       github.event_name == 'pull_request' && 
       needs.detect-changes.outputs.has_src_changes == 'true' && 
       needs.detect-changes.outputs.has_doc_changes == 'false'
+    permissions:
+      contents: read
+      pull-requests: write
     
     steps:
       - name: Post comment
@@ -305,6 +314,8 @@ except Exception as e:
   validate-examples:
     name: Validate Examples
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - uses: actions/checkout@v4
@@ -367,6 +378,8 @@ except Exception as e:
   check-versions:
     name: Check Version Consistency
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - uses: actions/checkout@v4
@@ -409,6 +422,8 @@ except Exception as e:
     runs-on: ubuntu-latest
     needs: [detect-changes, validate-docs, check-coverage]
     if: always()
+    permissions:
+      contents: read
     
     steps:
       - name: Generate summary
