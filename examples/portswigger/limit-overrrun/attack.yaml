@@ -318,7 +318,7 @@ states:
       - goto: end
 
   finish:
-    request:
+    request: |
       GET /cart/order-confirmation?order-confirmed=true HTTP/1.1
       Host: {{ target.host }}
       Cookie: session={{ login.session }}
