@@ -74,6 +74,7 @@ class PooledStrategy(ConnectionStrategy):
         self._verify_cert: bool = True
         self._follow_redirects: bool = False
         self._timeout: float = 30.0
+        self._http_client = None  # Store reference to HTTP client for mTLS
 
     def _prepare(self, num_threads: int, http_client: "HTTPClient") -> None:
         """
@@ -89,6 +90,7 @@ class PooledStrategy(ConnectionStrategy):
         self._base_url = f"{scheme}://{config.host}:{config.port}"
         self._verify_cert = config.tls.verify_cert
         self._follow_redirects = config.http.follow_redirects
+        self._http_client = http_client  # Store for mTLS cert access
         
         # Create pool (smaller than thread count)
         actual_pool_size = min(num_threads, self._pool_size)
@@ -96,6 +98,9 @@ class PooledStrategy(ConnectionStrategy):
         logger.info(f"PooledStrategy: Creating pool with {actual_pool_size} clients")
         logger.info(f"PooledStrategy: {num_threads} threads will share these connections")
         logger.warning("PooledStrategy: NOT suitable for race condition attacks!")
+
+        # Get client certificate for mTLS if configured
+        cert = http_client._get_client_cert()
 
         # Create pool clients with pre-established connections
         for i in range(actual_pool_size):
@@ -105,6 +110,7 @@ class PooledStrategy(ConnectionStrategy):
                 timeout=httpx.Timeout(self._timeout),
                 base_url=self._base_url,
                 follow_redirects=self._follow_redirects,
+                cert=cert
             )
             
             # Warm up connection using GET with stream to avoid body issues

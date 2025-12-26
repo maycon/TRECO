@@ -66,6 +66,7 @@ class MultiplexedStrategy(ConnectionStrategy):
         self._timeout: float = 30.0
         self._follow_redirects: bool = False
         self._bypass_proxy: bool = bypass_proxy
+        self._http_client = None  # Store reference to HTTP client for mTLS
 
     def _prepare(self, num_threads: int, http_client) -> None:
         """
@@ -82,6 +83,7 @@ class MultiplexedStrategy(ConnectionStrategy):
         self._verify_cert = config.tls.verify_cert
         self._proxy: Optional[ProxyConfig] = config.proxy
         self._follow_redirects = config.http.follow_redirects
+        self._http_client = http_client  # Store for mTLS cert access
         
         # Close existing client if any
         if self._client:
@@ -95,6 +97,9 @@ class MultiplexedStrategy(ConnectionStrategy):
         if not self._bypass_proxy and self._proxy:
             proxies = self._proxy.to_client_proxy()
         
+        # Get client certificate for mTLS if configured
+        cert = http_client._get_client_cert()
+        
         # Create single shared HTTP/2 client
         self._client = httpx.Client(
             http2=True,  # Always HTTP/2 for this strategy
@@ -103,6 +108,7 @@ class MultiplexedStrategy(ConnectionStrategy):
             base_url=self._base_url,
             follow_redirects=self._follow_redirects,
             proxy=proxies,
+            cert=cert
         )
         
         # Establish connection with a warmup request

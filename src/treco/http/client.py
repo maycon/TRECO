@@ -5,7 +5,8 @@ Provides HTTP/HTTPS communication with the target server using httpx.
 """
 
 import httpx
-from typing import Optional
+from typing import Optional, Union, Tuple
+from pathlib import Path
 
 import logging
 
@@ -24,6 +25,7 @@ class HTTPClient:
     - Configurable TLS verification
     - Connection pooling
     - Proxy support with bypass option
+    - mTLS (mutual TLS) client certificate authentication
     """
 
     def __init__(self, target: TargetConfig, http2: bool = False):
@@ -45,6 +47,54 @@ class HTTPClient:
         # Create both clients: one with proxy, one without
         self._client_no_proxy = self._create_client(use_proxy=False)
         self._client_with_proxy = self._create_client(use_proxy=True)
+    
+    def _get_client_cert(self) -> Optional[Union[str, Tuple[str, str], Tuple[str, str, str]]]:
+        """
+        Build the client certificate parameter for httpx.
+        
+        Returns:
+            None if no mTLS configured, otherwise one of:
+            - str: path to combined PEM file
+            - Tuple[str, str]: (cert_path, key_path)
+            - Tuple[str, str, str]: (cert_path, key_path, password)
+        
+        Raises:
+            FileNotFoundError: If certificate files don't exist
+            ValueError: If PKCS12 format is specified (not supported by httpx directly)
+        """
+        tls = self.config.tls
+        
+        # Check for PKCS12 format (not directly supported by httpx)
+        if tls.client_pfx:
+            raise ValueError(
+                "PKCS12 (.pfx/.p12) format is not directly supported by httpx. "
+                "Please convert to PEM format or use separate cert/key files. "
+                "Conversion: openssl pkcs12 -in client.pfx -out client.pem -nodes"
+            )
+        
+        # Combined PEM file
+        if tls.client_pem:
+            pem_path = Path(tls.client_pem)
+            if not pem_path.exists():
+                raise FileNotFoundError(f"Client PEM file not found: {tls.client_pem}")
+            return str(pem_path)
+        
+        # Separate cert and key files
+        if tls.client_cert and tls.client_key:
+            cert_path = Path(tls.client_cert)
+            key_path = Path(tls.client_key)
+            
+            if not cert_path.exists():
+                raise FileNotFoundError(f"Client certificate file not found: {tls.client_cert}")
+            if not key_path.exists():
+                raise FileNotFoundError(f"Client key file not found: {tls.client_key}")
+            
+            if tls.client_key_password:
+                return (str(cert_path), str(key_path), tls.client_key_password)
+            else:
+                return (str(cert_path), str(key_path))
+        
+        return None
 
     def _create_client(self, use_proxy: bool = False) -> httpx.Client:
         """
@@ -69,6 +119,9 @@ class HTTPClient:
         proxy_url = None
         if use_proxy and self.config.proxy:
             proxy_url = self.config.proxy.to_client_proxy()
+        
+        # Get client certificate for mTLS if configured
+        cert = self._get_client_cert() if self.config.tls.enabled else None
 
         client = httpx.Client(
             http2=self._http2,
@@ -76,7 +129,8 @@ class HTTPClient:
             timeout=timeout,
             limits=limits,
             follow_redirects=self.config.http.follow_redirects,
-            proxy=proxy_url
+            proxy=proxy_url,
+            cert=cert
         )
 
         return client
@@ -141,6 +195,9 @@ class HTTPClient:
         proxy_url = None
         if use_proxy and self.config.proxy:
             proxy_url = self.config.proxy.to_client_proxy()
+        
+        # Get client certificate for mTLS if configured
+        cert = self._get_client_cert() if self.config.tls.enabled else None
 
         return httpx.Client(
             http2=http2,
@@ -150,6 +207,7 @@ class HTTPClient:
             follow_redirects=self.config.http.follow_redirects,
             base_url=self.base_url,
             proxy=proxy_url,
+            cert=cert
         )
 
     def close(self) -> None:

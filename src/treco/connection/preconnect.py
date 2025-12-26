@@ -71,6 +71,7 @@ class PreconnectStrategy(ConnectionStrategy):
         self._timeout: float = 30.0
         self._follow_redirects: bool = False
         self._bypass_proxy: bool = bypass_proxy
+        self._http_client = None  # Store reference to HTTP client for mTLS
 
     def _prepare(self, num_threads: int, http_client) -> None:
         """
@@ -89,6 +90,7 @@ class PreconnectStrategy(ConnectionStrategy):
         self._base_url = f"{scheme}://{config.host}:{config.port}"
         self._verify_cert = config.tls.verify_cert
         self._follow_redirects = config.http.follow_redirects
+        self._http_client = http_client  # Store for mTLS cert access
         
         # Clear any existing clients from previous runs
         self._cleanup_clients()
@@ -126,6 +128,11 @@ class PreconnectStrategy(ConnectionStrategy):
             if not self._bypass_proxy and self._proxy:
                 proxies = self._proxy.to_client_proxy()
             
+            # Get client certificate for mTLS if configured
+            cert = None
+            if self._http_client:
+                cert = self._http_client._get_client_cert()
+            
             client = httpx.Client(
                 http2=self._use_http2,
                 verify=self._verify_cert,
@@ -133,7 +140,8 @@ class PreconnectStrategy(ConnectionStrategy):
                 base_url=self._base_url,
                 follow_redirects=self._follow_redirects,
                 limits=limits,
-                proxy=proxies
+                proxy=proxies,
+                cert=cert
             )
             
             # Force TCP/TLS connection establishment

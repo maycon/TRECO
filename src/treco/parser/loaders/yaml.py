@@ -130,6 +130,13 @@ class YAMLLoader:
         tls_config = TLSConfig(
             enabled=tls_data.get("enabled", False),
             verify_cert=tls_data.get("verify_cert", False),
+            # mTLS fields with template support
+            client_cert=self.engine.render(tls_data["client_cert"], {}) if "client_cert" in tls_data else None,
+            client_key=self.engine.render(tls_data["client_key"], {}) if "client_key" in tls_data else None,
+            client_key_password=self.engine.render(tls_data["client_key_password"], {}) if "client_key_password" in tls_data else None,
+            client_pem=self.engine.render(tls_data["client_pem"], {}) if "client_pem" in tls_data else None,
+            client_pfx=self.engine.render(tls_data["client_pfx"], {}) if "client_pfx" in tls_data else None,
+            client_pfx_password=self.engine.render(tls_data["client_pfx_password"], {}) if "client_pfx_password" in tls_data else None,
         )
 
         http_data = data.get("http", {})

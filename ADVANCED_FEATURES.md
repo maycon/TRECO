@@ -4,6 +4,7 @@ This document covers advanced TRECO features that provide additional flexibility
 
 ## Table of Contents
 
+- [mTLS (Mutual TLS) Support](#mtls-mutual-tls-support)
 - [Proxy Support](#proxy-support)
 - [HTTP/2 Support](#http2-support)
 - [Connection Reuse](#connection-reuse)
@@ -11,6 +12,269 @@ This document covers advanced TRECO features that provide additional flexibility
 - [Advanced Timeout Configuration](#advanced-timeout-configuration)
 - [All Available Extractors](#all-available-extractors)
 - [All Template Filters](#all-template-filters)
+
+---
+
+## mTLS (Mutual TLS) Support
+
+TRECO supports mutual TLS (mTLS) authentication, allowing you to present client certificates when connecting to servers that require certificate-based authentication.
+
+### Why mTLS?
+
+Many enterprise applications and secure APIs require mutual TLS for authentication:
+
+- **Financial Services**: Banking APIs, payment processors
+- **Healthcare Systems**: HIPAA-compliant endpoints
+- **Government & Military**: Classified systems
+- **Zero-Trust Architecture**: Internal microservices
+- **IoT Devices**: Device-to-server authentication
+
+Without mTLS support, TRECO cannot test race conditions on these protected endpoints.
+
+### Configuration Options
+
+TRECO supports three formats for client certificates:
+
+#### Option 1: Separate Certificate and Key Files
+
+The most common format - separate files for certificate and private key:
+
+```yaml
+target:
+  host: secure-api.internal
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: true
+    client_cert: "./certs/client.crt"
+    client_key: "./certs/client.key"
+    client_key_password: "{{ env('CLIENT_KEY_PASSWORD') }}"  # Optional
+```
+
+**Fields:**
+- `client_cert`: Path to X.509 client certificate file (PEM format)
+- `client_key`: Path to private key file (PEM format)
+- `client_key_password`: Password for encrypted private key (optional)
+
+#### Option 2: Combined PEM File
+
+Some systems provide a single PEM file containing both certificate and key:
+
+```yaml
+target:
+  host: secure-api.internal
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: true
+    client_pem: "./certs/client.pem"
+```
+
+**Field:**
+- `client_pem`: Path to combined PEM file containing certificate and private key
+
+#### Option 3: PKCS12 Format (.pfx/.p12)
+
+**Note:** PKCS12 format is not directly supported by httpx. You must convert to PEM format first.
+
+**Conversion command:**
+```bash
+# Convert PKCS12 to PEM format
+openssl pkcs12 -in client.pfx -out client.pem -nodes
+
+# Or convert to separate cert and key files
+openssl pkcs12 -in client.pfx -clcerts -nokeys -out client.crt
+openssl pkcs12 -in client.pfx -nocerts -nodes -out client.key
+```
+
+After conversion, use Option 1 or Option 2 above.
+
+### Template Support
+
+All certificate paths and passwords support Jinja2 template expressions:
+
+```yaml
+target:
+  tls:
+    enabled: true
+    # Load paths from environment variables
+    client_cert: "{{ env('CLIENT_CERT_PATH') }}"
+    client_key: "{{ env('CLIENT_KEY_PATH') }}"
+    client_key_password: "{{ env('CLIENT_KEY_PASSWORD') }}"
+    
+    # Or use command-line arguments
+    # client_cert: "{{ argv(1) }}"
+    # client_key: "{{ argv(2) }}"
+```
+
+**Available template filters:**
+- `env('VAR_NAME')`: Load from environment variable
+- `argv(index)`: Load from command-line argument
+- See [All Template Filters](#all-template-filters) for complete list
+
+### Usage with Connection Strategies
+
+mTLS works with all connection strategies:
+
+#### Preconnect Strategy
+```yaml
+states:
+  race_transfer:
+    race:
+      threads: 10
+      sync_mechanism: barrier
+      connection_strategy: preconnect  # Each thread gets own connection
+```
+
+#### Multiplexed Strategy (HTTP/2)
+```yaml
+states:
+  race_transfer:
+    race:
+      threads: 10
+      sync_mechanism: barrier
+      connection_strategy: multiplexed  # Single HTTP/2 connection shared
+```
+
+#### Lazy and Pooled Strategies
+```yaml
+states:
+  race_transfer:
+    race:
+      threads: 10
+      connection_strategy: lazy  # Or pooled
+```
+
+### Usage with Proxy Bypass
+
+mTLS works seamlessly with proxy bypass:
+
+```yaml
+target:
+  tls:
+    enabled: true
+    client_cert: "./certs/client.crt"
+    client_key: "./certs/client.key"
+  proxy:
+    host: "proxy.company.com"
+    port: 8080
+
+states:
+  direct_connection:
+    description: "Bypass proxy for this state"
+    options:
+      proxy_bypass: true  # Direct connection with mTLS
+```
+
+### Validation Rules
+
+TRECO enforces these validation rules:
+
+1. **Mutual Exclusivity**: Only ONE certificate format can be specified:
+   - ✅ Valid: `client_cert` + `client_key`
+   - ✅ Valid: `client_pem`
+   - ❌ Invalid: `client_cert` + `client_key` + `client_pem`
+
+2. **Complete Pairs**: When using separate files, both must be provided:
+   - ✅ Valid: `client_cert` + `client_key`
+   - ❌ Invalid: `client_cert` only
+   - ❌ Invalid: `client_key` only
+
+3. **File Existence**: Certificate files are validated at runtime
+   - Templates (`env()`, `argv()`) are resolved before validation
+   - Clear error messages if files don't exist
+
+### Complete Example
+
+See `examples/mtls-example.yaml` for a complete working example:
+
+```yaml
+metadata:
+  name: "mTLS Protected API - Race Condition Test"
+  version: "1.0"
+  author: "Security Team"
+  vulnerability: "CWE-362"
+
+target:
+  host: secure-api.internal
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: true
+    client_cert: "./certs/client.crt"
+    client_key: "./certs/client.key"
+    client_key_password: "{{ env('CLIENT_KEY_PASSWORD') }}"
+
+entrypoint:
+  state: race_transfer
+  input:
+    amount: 1000
+
+states:
+  race_transfer:
+    description: "Race condition on certificate-authenticated endpoint"
+    race:
+      threads: 10
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+    request: |
+      POST /api/v1/transfer HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {"amount": {{ amount }}}
+    next:
+      - when:
+          - status: 200
+        goto: end
+```
+
+### Running with mTLS
+
+```bash
+# Set password via environment variable
+export CLIENT_KEY_PASSWORD="my-secure-password"
+
+# Run the attack
+treco examples/mtls-example.yaml
+
+# Or specify cert paths via environment
+export CLIENT_CERT_PATH="./certs/client.crt"
+export CLIENT_KEY_PATH="./certs/client.key"
+treco examples/mtls-example.yaml
+```
+
+### Troubleshooting
+
+#### Certificate Not Found
+```
+FileNotFoundError: Client certificate file not found: ./certs/client.crt
+```
+**Solution:** Ensure the certificate file exists at the specified path.
+
+#### Invalid Certificate Format
+```
+httpx.SSLError: [SSL: WRONG_VERSION_NUMBER] wrong version number
+```
+**Solution:** Ensure certificate is in PEM format. Convert if needed:
+```bash
+openssl x509 -inform DER -in client.der -out client.crt
+```
+
+#### Password-Protected Key
+```
+httpx.SSLError: [SSL: BAD_DECRYPT] bad decrypt
+```
+**Solution:** Provide `client_key_password` or remove password:
+```bash
+openssl rsa -in client.key -out client_unencrypted.key
+```
+
+#### PKCS12 Not Supported
+```
+ValueError: PKCS12 (.pfx/.p12) format is not directly supported by httpx
+```
+**Solution:** Convert to PEM format (see Option 3 above).
 
 ---
 
