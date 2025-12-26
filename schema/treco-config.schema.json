@@ -416,9 +416,6 @@
                             "description": "State transitions based on HTTP response",
                             "items": {
                                 "type": "object",
-                                "required": [
-                                    "goto"
-                                ],
                                 "properties": {
                                     "on_status": {
                                         "oneOf": [
@@ -439,7 +436,167 @@
                                                 "description": "List of HTTP status codes to match"
                                             }
                                         ],
-                                        "description": "HTTP status code(s) that trigger this transition (omit for unconditional transition)"
+                                        "description": "[Legacy] HTTP status code(s) that trigger this transition"
+                                    },
+                                    "when": {
+                                        "type": "array",
+                                        "description": "List of conditions that must ALL be true (AND logic)",
+                                        "minItems": 1,
+                                        "items": {
+                                            "type": "object",
+                                            "minProperties": 1,
+                                            "maxProperties": 1,
+                                            "properties": {
+                                                "status": {
+                                                    "type": "integer",
+                                                    "minimum": 100,
+                                                    "maximum": 599,
+                                                    "description": "Exact HTTP status code match"
+                                                },
+                                                "status_in": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "integer",
+                                                        "minimum": 100,
+                                                        "maximum": 599
+                                                    },
+                                                    "minItems": 1,
+                                                    "description": "Match any of these HTTP status codes"
+                                                },
+                                                "status_range": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "integer",
+                                                        "minimum": 100,
+                                                        "maximum": 599
+                                                    },
+                                                    "minItems": 2,
+                                                    "maxItems": 2,
+                                                    "description": "Match status codes in range [min, max] inclusive"
+                                                },
+                                                "condition": {
+                                                    "type": "string",
+                                                    "description": "Jinja2 boolean expression using extracted variables"
+                                                },
+                                                "body_contains": {
+                                                    "type": "string",
+                                                    "description": "Response body must contain this substring"
+                                                },
+                                                "body_not_contains": {
+                                                    "type": "string",
+                                                    "description": "Response body must NOT contain this substring"
+                                                },
+                                                "body_matches": {
+                                                    "type": "string",
+                                                    "description": "Response body must match this regex pattern"
+                                                },
+                                                "body_equals": {
+                                                    "type": "string",
+                                                    "description": "Response body must exactly equal this string"
+                                                },
+                                                "header_exists": {
+                                                    "type": "string",
+                                                    "description": "Header with this name must exist"
+                                                },
+                                                "header_not_exists": {
+                                                    "type": "string",
+                                                    "description": "Header with this name must NOT exist"
+                                                },
+                                                "header_equals": {
+                                                    "type": "object",
+                                                    "required": ["name", "value"],
+                                                    "properties": {
+                                                        "name": {
+                                                            "type": "string",
+                                                            "description": "Header name"
+                                                        },
+                                                        "value": {
+                                                            "type": "string",
+                                                            "description": "Expected header value (exact match)"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "description": "Header must have exact value"
+                                                },
+                                                "header_contains": {
+                                                    "type": "object",
+                                                    "required": ["name", "value"],
+                                                    "properties": {
+                                                        "name": {
+                                                            "type": "string",
+                                                            "description": "Header name"
+                                                        },
+                                                        "value": {
+                                                            "type": "string",
+                                                            "description": "Substring to find in header value"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "description": "Header value must contain substring"
+                                                },
+                                                "header_matches": {
+                                                    "type": "object",
+                                                    "required": ["name", "pattern"],
+                                                    "properties": {
+                                                        "name": {
+                                                            "type": "string",
+                                                            "description": "Header name"
+                                                        },
+                                                        "pattern": {
+                                                            "type": "string",
+                                                            "description": "Regex pattern to match header value"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "description": "Header value must match regex"
+                                                },
+                                                "header_compare": {
+                                                    "type": "object",
+                                                    "required": ["name", "operator", "value"],
+                                                    "properties": {
+                                                        "name": {
+                                                            "type": "string",
+                                                            "description": "Header name"
+                                                        },
+                                                        "operator": {
+                                                            "type": "string",
+                                                            "enum": ["<", "<=", ">", ">=", "==", "!="],
+                                                            "description": "Comparison operator"
+                                                        },
+                                                        "value": {
+                                                            "type": "number",
+                                                            "description": "Numeric value to compare against"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "description": "Numeric comparison of header value"
+                                                },
+                                                "response_time_ms": {
+                                                    "type": "object",
+                                                    "required": ["operator", "value"],
+                                                    "properties": {
+                                                        "operator": {
+                                                            "type": "string",
+                                                            "enum": ["<", "<=", ">", ">=", "==", "!="],
+                                                            "description": "Comparison operator"
+                                                        },
+                                                        "value": {
+                                                            "type": "number",
+                                                            "minimum": 0,
+                                                            "description": "Response time threshold in milliseconds"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "description": "Response time comparison"
+                                                }
+                                            },
+                                            "additionalProperties": false
+                                        }
+                                    },
+                                    "otherwise": {
+                                        "type": "boolean",
+                                        "const": true,
+                                        "description": "Default fallback transition when no other conditions match"
                                     },
                                     "goto": {
                                         "type": "string",
@@ -453,6 +610,45 @@
                                         "description": "Optional delay before transition (milliseconds)"
                                     }
                                 },
+                                "required": ["goto"],
+                                "oneOf": [
+                                    {
+                                        "required": ["on_status"],
+                                        "not": {
+                                            "anyOf": [
+                                                {"required": ["when"]},
+                                                {"required": ["otherwise"]}
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "required": ["when"],
+                                        "not": {
+                                            "anyOf": [
+                                                {"required": ["on_status"]},
+                                                {"required": ["otherwise"]}
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "required": ["otherwise"],
+                                        "not": {
+                                            "anyOf": [
+                                                {"required": ["on_status"]},
+                                                {"required": ["when"]}
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "anyOf": [
+                                                {"required": ["on_status"]},
+                                                {"required": ["when"]},
+                                                {"required": ["otherwise"]}
+                                            ]
+                                        }
+                                    }
+                                ],
                                 "additionalProperties": false
                             }
                         },
