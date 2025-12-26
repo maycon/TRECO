@@ -172,9 +172,9 @@ config:
       username: "{{ env('CORP_USER') }}"
       password: "{{ env('CORP_PASS') }}"
 
-entrypoints:
-  - state: test
-    input: {}
+entrypoint:
+  state: test
+  input: {}
 
 states:
   test:
@@ -908,11 +908,11 @@ config:
       username: "{{ env('PROXY_USER') }}"
       password: "{{ env('PROXY_PASS') }}"
 
-entrypoints:
-  - state: authenticate
-    input:
-      username: "{{ argv('user', 'testuser') }}"
-      password: "{{ argv('pass', 'testpass') }}"
+entrypoint:
+  state: authenticate
+  input:
+    username: "{{ argv('user', 'testuser') }}"
+    password: "{{ argv('pass', 'testpass') }}"
 
 states:
   authenticate:

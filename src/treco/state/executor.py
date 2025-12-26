@@ -124,7 +124,7 @@ class StateExecutor:
         try:
             # Render HTTP request template
             context_input = context.to_dict()
-            context_input["config"] = self.http_client.config
+            context_input["target"] = self.http_client.config
             http_text = self.template_engine.render(state.request, context_input, context)
 
             # Send HTTP request

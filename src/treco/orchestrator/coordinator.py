@@ -4,18 +4,19 @@ Main coordinator for Treco framework.
 Orchestrates the entire attack flow including race condition attacks.
 """
 
+import os
 import threading
 import time
 import traceback
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any, Optional, Union
+from dataclasses import dataclass, is_dataclass
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 from treco.logging import user_output
-from treco.models.config import RaceConfig
+from treco.models.config import BaseConfig, RaceConfig
 
 from treco.models import Config, State, ExecutionContext
 from treco.parser import YAMLLoader
@@ -108,35 +109,48 @@ class RaceCoordinator:
         logger.info(f"Attack completed: {len(results)} states executed")
     """
 
-    def __init__(self, config_path: str, cli_args: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        config_path: str,
+        cli_inputs: Optional[Dict[str, Any]] = None,
+        log_level: str = "info",
+    ):
         """
         Initialize the coordinator.
 
         Args:
             config_path: Path to YAML configuration file
-            cli_args: Command-line arguments dictionary
+            cli_inputs: Command-line input variables to override config
+            cli_config: Command-line config overrides (threads, host, etc.)
+            log_level: Logging level (debug, info, warning, error)
         """
+        self.config_path = config_path
+        self.cli_inputs = cli_inputs or {}
+        self.log_level = log_level
+        
         # Load configuration
         loader = YAMLLoader()
         self.config: Config = loader.load(config_path)
 
-        # Initialize execution context
-        import os
+        # Apply CLI config overrides
+        self._apply_config_overrides()
 
-        self.context = ExecutionContext(argv=cli_args or {}, env=dict(os.environ))
+        # Initialize context with CLI inputs
+        self.context = ExecutionContext()
+        self.context.update(self.cli_inputs)
+
+        self.context = ExecutionContext(argv=cli_inputs or {}, env=dict(os.environ))
 
         # Initialize components
         self.template_engine = TemplateEngine()
-        self.http_client = HTTPClient(self.config.config)
+        self.http_client = HTTPClient(self.config.target)
         self.http_parser = HTTPParser()
-        # self.extractors = extractor.JsonExtractor()
         self.engine = TemplateEngine()
 
         # Initialize state executor
         self.executor = StateExecutor(
             self.http_client,
-            self.template_engine,
-            # self.extractor
+            self.template_engine
         )
 
         # Set self as race coordinator in executor
@@ -153,6 +167,64 @@ class RaceCoordinator:
         logger.info(f"Vulnerability: {self.config.metadata.vulnerability}")
         logger.info(f"Target: {self.http_client.base_url}")
         logger.info(f"{'='*70}\n")
+
+
+    def _apply_config_overrides(self):
+        """
+        Apply command-line config overrides to loaded configuration.
+        """
+
+        # Handle nested config overrides
+        logger.debug(f"Applying CLI config overrides: {self.cli_inputs}")
+        if 'input' in self.cli_inputs:
+            self._merge_config(self.config.entrypoint.input, self.cli_inputs['input'])
+
+        if 'target' in self.cli_inputs:
+            self._merge_config(self.config.target, self.cli_inputs['target'])
+
+        # self._merge_config(self.config, self.cli_inputs)
+
+
+    def _merge_config(self, config: Union[BaseConfig, Dict[Any, Any]], cli_config: Dict[str, Any]) -> None:
+        """
+        Merge CLI config overrides into existing configuration.
+        Args:
+            config: Existing configuration object or dictionary
+            cli_config: CLI config overrides as dictionary
+        """
+        
+        logger.debug(f"Merging CLI config overrides: {cli_config}")
+        logger.debug(f"Current config before merge: {config}")
+        
+        for key, value in cli_config.items():
+            logger.debug(f"Processing config override: {key} = {value}")
+            
+            if isinstance(config, dict):
+                logger.debug(f"Current config value: {config.get(key, 'N/A')}")
+                if key in config:
+                    if isinstance(config[key], dict) and isinstance(value, dict):
+                        logger.info(f"Merging nested config for: {key}")
+                        self._merge_config(config[key], value)
+                    else:
+                        logger.info(f"Overriding config: {key} = {value}")
+                        config[key] = value
+                else:
+                    logger.info(f"Adding new config: {key} = {value}")
+                    config[key] = value
+            else:
+                logger.debug(f"Current config value: {getattr(config, key, 'N/A')}")
+                if hasattr(config, key):
+                    current_value = getattr(config, key)
+                    if is_dataclass(current_value) and isinstance(value, dict):
+                        logger.info(f"Merging nested config for: {key}")
+                        self._merge_config(current_value, value)
+                    elif isinstance(current_value, dict) and isinstance(value, dict):
+                        logger.info(f"Merging nested dict config for: {key}")
+                        self._merge_config(current_value, value)
+                    else:
+                        logger.info(f"Overriding config: {key} = {value}")
+                        setattr(config, key, value)
+
 
     def run(self) -> List:
         """
@@ -251,7 +323,7 @@ class RaceCoordinator:
                 if state.logger.on_thread_enter:
 
                     context_input = self.context.to_dict()
-                    context_input["config"] = self.http_client.config
+                    context_input["target"] = self.http_client.config
                     context_input["thread"] = thread_info
 
                     logger_output = self.engine.render(
@@ -269,7 +341,7 @@ class RaceCoordinator:
                 # but it doesn't matter because we haven't connected yet
                 # ════════════════════════════════════════════════════════════
                 context_input = context.to_dict()
-                context_input["config"] = self.http_client.config
+                context_input["target"] = self.http_client.config
                 context_input["thread"] = {"id": thread_id, "count": num_threads}
 
                 http_text = self.template_engine.render(state.request, context_input, context)
@@ -306,6 +378,9 @@ class RaceCoordinator:
                 # All preparation is done, just send the prepared request
                 # ════════════════════════════════════════════════════════════
                 start_time_ns = time.perf_counter_ns()
+
+                from pprint import pprint  # noqa: E402
+                pprint(request)
 
                 response = client.send(request)
 
@@ -373,7 +448,10 @@ class RaceCoordinator:
                 with results_lock:
                     race_results.append(result)
 
-                logger.info(f"[Thread {thread_id}] ERROR: {str(e)}")
+                logger.error(f"\n{'='*70}")
+                logger.error(f"[Thread {thread_id}] ERROR: {str(e)}")
+                logger.error(f"{'='*70}\n")
+                traceback.print_exc()
 
         # Create and start threads
         threads = []

@@ -28,11 +28,11 @@ Create a file called ``attack.yaml``:
        enabled: true
        verify_cert: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "testuser"
-         password: "testpass"
+   entrypoint:
+     state: login
+     input:
+       username: "testuser"
+       password: "testpass"
 
    states:
      login:
@@ -223,11 +223,11 @@ Basic Authentication Test
      tls:
        enabled: false
 
-   entrypoints:
-     - state: race_login
-       input:
-         username: "admin"
-         password: "password123"
+   entrypoint:
+     state: race_login
+     input:
+       username: "admin"
+       password: "password123"
 
    states:
      race_login:
@@ -268,11 +268,11 @@ API with TOTP 2FA
      tls:
        enabled: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ argv('user', 'testuser') }}"
-         totp_seed: "{{ argv('seed', 'JBSWY3DPEHPK3PXP') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ argv('user', 'testuser') }}"
+       totp_seed: "{{ argv('seed', 'JBSWY3DPEHPK3PXP') }}"
 
    states:
      login:

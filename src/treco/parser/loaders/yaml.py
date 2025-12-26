@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from treco.models import (
     Config,
     Metadata,
-    ServerConfig,
+    TargetConfig,
     TLSConfig,
     Entrypoint,
     State,
@@ -89,10 +89,11 @@ class YAMLLoader:
         Returns:
             Typed Config object
         """
+
         return Config(
             metadata=self._build_metadata(data["metadata"]),
-            config=self._build_server_config(data["config"]),
-            entrypoints=self._build_entrypoints(data["entrypoints"]),
+            target=self._build_target_config(data["target"]),
+            entrypoint=self._build_entrypoint(data["entrypoint"]),
             states=self._build_states(data["states"]),
         )
 
@@ -105,7 +106,7 @@ class YAMLLoader:
             vulnerability=data["vulnerability"],
         )
 
-    def _build_server_config(self, data: Dict[str, Any]) -> ServerConfig:
+    def _build_target_config(self, data: Dict[str, Any]) -> TargetConfig:
         """Build ServerConfig object from dictionary."""
         tls_data = data.get("tls", {})
         tls_config = TLSConfig(
@@ -132,7 +133,7 @@ class YAMLLoader:
                 ) if "auth" in proxy_data else None
             )
 
-        return ServerConfig(
+        return TargetConfig(
             host=self.engine.render(data["host"], {}),
             port=data["port"],
             threads=data.get("threads", 20),
@@ -142,7 +143,7 @@ class YAMLLoader:
             proxy=proxy_config,
         )
 
-    def _build_entrypoints_input(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_entrypoint_input(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Build input dictionary for Entrypoint."""
         if not data:
             return {}
@@ -153,21 +154,18 @@ class YAMLLoader:
             if isinstance(value, str):
                 result[key] = self.engine.render(value, {})
             elif isinstance(value, dict):
-                result[key] = self._build_entrypoints_input(value)
+                result[key] = self._build_entrypoint_input(value)
             else:
                 result[key] = value  # Keep as is for non-str/dict types
 
         return result
 
-    def _build_entrypoints(self, data: list) -> list:
+    def _build_entrypoint(self, entry: dict) -> Entrypoint:
         """Build list of Entrypoint objects from list."""
-        return [
-            Entrypoint(
+        return Entrypoint(
                 state=entry["state"],
-                input=self._build_entrypoints_input(entry.get("input", {})),
+                input=self._build_entrypoint_input(entry.get("input", {})),
             )
-            for entry in data
-        ]
 
     def _build_states(self, data: Dict[str, Any]) -> Dict[str, State]:
         """Build dictionary of State objects."""

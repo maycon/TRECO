@@ -132,12 +132,12 @@ Reference in YAML:
 
 .. code-block:: yaml
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ env('USERNAME') }}"
-         password: "{{ env('PASSWORD') }}"
-         api_key: "{{ env('API_KEY', 'default_key') }}"
+   entrypoint:
+     state: login
+      input:
+      username: "{{ env('USERNAME') }}"
+      password: "{{ env('PASSWORD') }}"
+      api_key: "{{ env('API_KEY', 'default_key') }}"
 
 Complete Examples
 -----------------

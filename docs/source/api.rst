@@ -102,8 +102,8 @@ Root configuration object.
    @dataclass
    class Config:
        metadata: Metadata
-       config: ServerConfig
-       entrypoints: List[Entrypoint]
+       target: TargetConfig
+       entrypoint: Entrypoint
        states: Dict[str, State]
 
 ServerConfig

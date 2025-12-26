@@ -7,6 +7,7 @@ Validates YAML structure, required fields, and references.
 from typing import Dict, Any, Set
 
 from treco.http.extractor import get_extractor, ExtractorRegistry
+from treco.models.config import Entrypoint
 
 
 class ConfigValidator:
@@ -41,13 +42,13 @@ class ConfigValidator:
         """
         self._check_required_sections(data)
         self._validate_metadata(data["metadata"])
-        self._validate_config(data["config"])
-        self._validate_entrypoints(data["entrypoints"], data["states"])
+        self._validate_target(data["target"])
+        self._validate_entrypoint(data["entrypoint"], data["states"])
         self._validate_states(data["states"])
 
     def _check_required_sections(self, data: Dict[str, Any]) -> None:
         """Check that all required top-level sections exist."""
-        required = ["metadata", "config", "entrypoints", "states"]
+        required = ["metadata", "target", "entrypoint", "states"]
         for section in required:
             if section not in data:
                 raise ValueError(f"Missing required section: {section}")
@@ -59,7 +60,7 @@ class ConfigValidator:
             if field not in metadata:
                 raise ValueError(f"Missing required metadata field: {field}")
 
-    def _validate_config(self, config: Dict[str, Any]) -> None:
+    def _validate_target(self, config: Dict[str, Any]) -> None:
         """Validate config section."""
         # Required fields
         if "host" not in config:
@@ -81,19 +82,17 @@ class ConfigValidator:
             if "enabled" in tls and not isinstance(tls["enabled"], bool):
                 raise ValueError(f"TLS enabled must be boolean, got: {type(tls['enabled'])}")
 
-    def _validate_entrypoints(self, entrypoints: list, states: Dict[str, Any]) -> None:
-        """Validate entrypoints section."""
-        if not entrypoints:
+    def _validate_entrypoint(self, entrypoint: dict, states: Dict[str, Any]) -> None:
+        """Validate entrypoint section."""
+        if not entrypoint:
             raise ValueError("At least one entrypoint is required")
 
-        for idx, entry in enumerate(entrypoints):
-            if "state" not in entry:
-                raise ValueError(f"Entrypoint {idx} missing 'state' field")
+        if not "state" in entrypoint:
+            raise ValueError(f"Entrypoint missing 'state' field")
 
-            # Check that referenced state exists
-            state_name = entry["state"]
-            if state_name not in states:
-                raise ValueError(f"Entrypoint references non-existent state: {state_name}")
+        # Check that referenced state exists
+        if entrypoint["state"] not in states:
+            raise ValueError(f"Entrypoint references non-existent state: {entrypoint["state"]}")
 
     def _validate_states(self, states: Dict[str, Any]) -> None:
         """Validate states section."""

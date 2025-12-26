@@ -1,0 +1,48 @@
+metadata:
+  name: "Race Condition Test"
+  version: "1.0"
+  author: "Security Researcher"
+  vulnerability: "CWE-362"
+
+target:
+  host: "api.example.com"
+  port: 443
+  threads: 20
+  reuse_connection: false
+  tls:
+    enabled: true
+    verify_cert: true
+
+entrypoint:
+  state: login
+  input:
+    username: "testuser"
+    password: "testpass"
+    api_key: "{{ env('API_KEY') }}"
+
+states:
+  login:
+    description: "Authenticate and get token"
+    request: |
+      POST /api/login HTTP/1.1
+      Host: {{ config.host }}
+      Content-Type: application/json
+
+      {"username": "{{ username }}", "password": "{{ password }}"}
+
+    extract:
+      token:
+        type: jpath
+        pattern: "$.access_token"
+
+    next:
+      - on_status: 200
+        goto: end
+      - on_status: 401
+        goto: error
+
+  end:
+    description: "Successful login state"
+
+  error:
+    description: "Error state for failed login attempts"

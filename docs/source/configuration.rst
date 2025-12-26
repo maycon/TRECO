@@ -12,7 +12,7 @@ A complete TRECO configuration file consists of four main sections:
 
    metadata:      # Attack metadata
    config:        # Server and execution settings
-   entrypoints:   # Starting points
+   entrypoint:    # Starting point
    states:        # State definitions
 
 Metadata Section
@@ -101,19 +101,19 @@ The ``config`` section defines server and execution settings.
      - false
      - Verify SSL/TLS certificates
 
-Entrypoints Section
+Entrypoint Section
 -------------------
 
-The ``entrypoints`` section defines starting points for execution.
+The ``entrypoint`` section defines starting point for execution.
 
 .. code-block:: yaml
 
-   entrypoints:
-     - state: login
-       input:
-         username: "testuser"
-         password: "testpass"
-         api_key: "{{ env('API_KEY') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "testuser"
+       password: "testpass"
+       api_key: "{{ env('API_KEY') }}"
 
 **Fields:**
 
@@ -387,11 +387,11 @@ Here's a complete configuration example:
        enabled: true
        verify_cert: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ argv('user', 'testuser') }}"
-         password: "{{ env('PASSWORD', 'testpass') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ argv('user', 'testuser') }}"
+       password: "{{ env('PASSWORD', 'testpass') }}"
 
    states:
      login:

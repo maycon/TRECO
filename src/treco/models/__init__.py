@@ -8,7 +8,7 @@ and runtime execution state.
 from .config import (
     Metadata,
     TLSConfig,
-    ServerConfig,
+    TargetConfig,
     Entrypoint,
     Transition,
     RaceConfig,
@@ -21,7 +21,7 @@ from .context import ExecutionContext
 __all__ = [
     "Metadata",
     "TLSConfig",
-    "ServerConfig",
+    "TargetConfig",
     "Entrypoint",
     "Transition",
     "RaceConfig",

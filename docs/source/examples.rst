@@ -23,11 +23,11 @@ Test if a payment can be processed multiple times.
        enabled: true
        verify_cert: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ env('USERNAME') }}"
-         password: "{{ env('PASSWORD') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ env('USERNAME') }}"
+       password: "{{ env('PASSWORD') }}"
 
    states:
      login:
@@ -147,12 +147,12 @@ Test if a single-use coupon can be redeemed multiple times.
      tls:
        enabled: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ argv('user', 'testuser') }}"
-         password: "{{ env('PASSWORD') }}"
-         coupon_code: "{{ argv('coupon', 'SAVE50') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ argv('user', 'testuser') }}"
+       password: "{{ env('PASSWORD') }}"
+       coupon_code: "{{ argv('coupon', 'SAVE50') }}"
 
    states:
      login:
@@ -264,12 +264,12 @@ Test if limited inventory items can be over-purchased.
      tls:
        enabled: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ env('USERNAME') }}"
-         password: "{{ env('PASSWORD') }}"
-         product_id: "{{ argv('product', 'LIMITED-001') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ env('USERNAME') }}"
+       password: "{{ env('PASSWORD') }}"
+       product_id: "{{ argv('product', 'LIMITED-001') }}"
 
    states:
      login:
@@ -402,16 +402,16 @@ Test if rate limiting can be bypassed through concurrent requests.
      tls:
        enabled: true
 
-   entrypoints:
-     - state: race_login
-       input:
-         username: "{{ argv('user', 'admin') }}"
-         passwords:
-           - "password123"
-           - "admin123"
-           - "letmein"
-           - "qwerty"
-           - "12345678"
+   entrypoint:
+     state: race_login
+     input:
+       username: "{{ argv('user', 'admin') }}"
+       passwords:
+         - "password123"
+         - "admin123"
+         - "letmein"
+         - "qwerty"
+         - "12345678"
 
    states:
      race_login:
@@ -479,12 +479,12 @@ Test authentication with TOTP-based 2FA.
      tls:
        enabled: true
 
-   entrypoints:
-     - state: login
-       input:
-         username: "{{ env('USERNAME') }}"
-         password: "{{ env('PASSWORD') }}"
-         totp_seed: "{{ env('TOTP_SEED') }}"
+   entrypoint:
+     state: login
+     input:
+       username: "{{ env('USERNAME') }}"
+       password: "{{ env('PASSWORD') }}"
+       totp_seed: "{{ env('TOTP_SEED') }}"
 
    states:
      login:
@@ -588,11 +588,11 @@ Complete flow with CSRF token extraction.
      tls:
        enabled: true
 
-   entrypoints:
-     - state: get_login_page
-       input:
-         username: "{{ env('USERNAME') }}"
-         password: "{{ env('PASSWORD') }}"
+   entrypoint:
+     state: get_login_page
+     input:
+       username: "{{ env('USERNAME') }}"
+       password: "{{ env('PASSWORD') }}"
 
    states:
      get_login_page:
