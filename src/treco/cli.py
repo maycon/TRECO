@@ -128,8 +128,13 @@ def apply_type_hint(value: Any, type_hint: str) -> Any:
     is_flag=True,
     help='Disable banner output'
 )
+@click.option(
+    '--validate-only',
+    is_flag=True,
+    help='Validate configuration without executing the attack'
+)
 def main(config_file: str, variables: Dict[str, Any], log_level: str, 
-         no_banner: bool):
+         no_banner: bool, validate_only: bool):
     """
     TRECO - Tactical Race Exploitation & Concurrency Orchestrator
     
@@ -138,6 +143,7 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     \b
     Examples:
         treco attack.yaml
+        treco attack.yaml --validate-only
         treco attack.yaml --set username=carlos --set password=secret
         treco attack.yaml -s threads=50 -s host=target.com
         treco attack.yaml --set passwords=@wordlist.txt
@@ -147,12 +153,16 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     setup_logging(log_level)
     logger = get_logger()
 
-    # Print banner (unless suppressed)
-    if not no_banner:
+    # Print banner (unless suppressed or validating only)
+    if not no_banner and not validate_only:
         print_banner()
     
-    results = run_attack(config_file, variables)
-    return results
+    # Run validation or full attack
+    if validate_only:
+        return validate_config(config_file)
+    else:
+        results = run_attack(config_file, variables)
+        return results
 
 def print_banner():
     """Print TRECO banner."""
@@ -162,6 +172,65 @@ def print_banner():
 ║                    Orchestrator                           ║
 ╚═══════════════════════════════════════════════════════════╝
     """)
+
+
+def validate_config(config_path: str) -> int:
+    """
+    Validate configuration file without executing the attack.
+
+    Args:
+        config_path: Path to configuration file
+
+    Returns:
+        Exit code (0 for valid, 1 for invalid)
+    """
+    import yaml
+    from treco.parser.schema_validator import SchemaValidator, SchemaValidationError
+    from treco.parser.validator import ConfigValidator
+    
+    logger = get_logger()
+    
+    try:
+        # Load YAML
+        with open(config_path, "r", encoding="utf-8") as f:
+            raw_data = yaml.safe_load(f)
+        
+        # Layer 1: Schema validation
+        print("⏳ Running schema validation...")
+        schema_validator = SchemaValidator()
+        schema_validator.validate(raw_data)
+        print(success("✓ Schema validation passed"))
+        
+        # Layer 2: Semantic validation
+        print("⏳ Running semantic validation...")
+        semantic_validator = ConfigValidator()
+        semantic_validator.validate(raw_data)
+        print(success("✓ Semantic validation passed"))
+        
+        print(success(f"\n✓ Configuration is valid: {config_path}"))
+        return 0
+        
+    except FileNotFoundError as e:
+        print(error(f"✗ File not found: {e}"))
+        return 1
+        
+    except yaml.YAMLError as e:
+        print(error(f"✗ YAML syntax error: {e}"))
+        return 1
+        
+    except SchemaValidationError as e:
+        print(error(f"✗ Schema validation failed:\n{e}"))
+        return 1
+        
+    except ValueError as e:
+        print(error(f"✗ Semantic validation failed: {e}"))
+        return 1
+        
+    except Exception as e:
+        import sys, traceback
+        print(error(f"✗ Validation failed: {e}"))
+        logger.debug(traceback.format_exc())
+        return 1
 
 
 def run_attack(config_path: str, variables: Dict[str, Any]) -> int:
