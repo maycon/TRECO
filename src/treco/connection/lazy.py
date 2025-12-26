@@ -63,6 +63,7 @@ class LazyStrategy(ConnectionStrategy):
         self._verify_cert: bool = True
         self._follow_redirects: bool = False
         self._timeout: float = 30.0
+        self._http_client = None  # Store reference to HTTP client for mTLS
 
     def _prepare(self, num_threads: int, http_client: "HTTPClient") -> None:
         """
@@ -80,6 +81,7 @@ class LazyStrategy(ConnectionStrategy):
         self._base_url = f"{scheme}://{config.host}:{config.port}"
         self._verify_cert = config.tls.verify_cert
         self._follow_redirects = config.http.follow_redirects
+        self._http_client = http_client  # Store for mTLS cert access
         
         logger.info(f"LazyStrategy prepared for {num_threads} threads")
         logger.warning("LazyStrategy: NOT recommended for race attacks!")
@@ -111,12 +113,18 @@ class LazyStrategy(ConnectionStrategy):
         """
         logger.debug(f"[Thread {thread_id}] Creating new httpx.Client (lazy)")
         
+        # Get client certificate for mTLS if configured
+        cert = None
+        if self._http_client:
+            cert = self._http_client._get_client_cert()
+        
         return httpx.Client(
             http2=True,
             verify=self._verify_cert,
             timeout=httpx.Timeout(self._timeout),
             base_url=self._base_url,
             follow_redirects=self._follow_redirects,
+            cert=cert
         )
 
     def cleanup(self) -> None:

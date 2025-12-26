@@ -39,10 +39,22 @@ class TLSConfig(BaseConfig):
     Attributes:
         enabled: Whether to use HTTPS
         verify_cert: Whether to verify SSL certificates
+        client_cert: Path to client certificate file (for mTLS)
+        client_key: Path to client private key file (for mTLS)
+        client_key_password: Password for encrypted client key (supports templates)
+        client_pem: Path to combined PEM file containing cert and key (for mTLS)
+        client_pfx: Path to PKCS12 file (.pfx/.p12) (for mTLS)
+        client_pfx_password: Password for PKCS12 file (supports templates)
     """
 
     enabled: bool = False
     verify_cert: bool = False
+    client_cert: Optional[str] = None
+    client_key: Optional[str] = None
+    client_key_password: Optional[str] = None
+    client_pem: Optional[str] = None
+    client_pfx: Optional[str] = None
+    client_pfx_password: Optional[str] = None
 
 @dataclass
 class HTTPConfig:

@@ -79,6 +79,30 @@
               "type": "boolean",
               "default": false,
               "description": "Verify SSL certificates (disable for self-signed certs)"
+            },
+            "client_cert": {
+              "type": "string",
+              "description": "Path to client certificate file for mTLS (supports Jinja2 templates)"
+            },
+            "client_key": {
+              "type": "string",
+              "description": "Path to client private key file for mTLS (supports Jinja2 templates)"
+            },
+            "client_key_password": {
+              "type": "string",
+              "description": "Password for encrypted client key (supports Jinja2 templates like env())"
+            },
+            "client_pem": {
+              "type": "string",
+              "description": "Path to combined PEM file containing cert and key for mTLS (supports Jinja2 templates)"
+            },
+            "client_pfx": {
+              "type": "string",
+              "description": "Path to PKCS12 file (.pfx/.p12) for mTLS (supports Jinja2 templates)"
+            },
+            "client_pfx_password": {
+              "type": "string",
+              "description": "Password for PKCS12 file (supports Jinja2 templates like env())"
             }
           },
           "additionalProperties": false

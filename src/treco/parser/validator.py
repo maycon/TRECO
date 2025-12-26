@@ -81,6 +81,9 @@ class ConfigValidator:
             tls = config["tls"]
             if "enabled" in tls and not isinstance(tls["enabled"], bool):
                 raise ValueError(f"TLS enabled must be boolean, got: {type(tls['enabled'])}")
+            
+            # Validate mTLS configuration
+            self._validate_mtls_config(tls)
 
     def _validate_entrypoint(self, entrypoint: dict, states: Dict[str, Any]) -> None:
         """Validate entrypoint section."""
@@ -414,3 +417,51 @@ class ConfigValidator:
                     f"State '{state_name}' extractor for variable '{var_name}' "
                     f"has invalid pattern type: {pattern_type}. Valid types: {", ".join(list(ExtractorRegistry.get_registered_types()))}"
                 )
+    
+    def _validate_mtls_config(self, tls: Dict[str, Any]) -> None:
+        """
+        Validate mTLS (mutual TLS) configuration.
+        
+        Args:
+            tls: TLS configuration dictionary
+            
+        Raises:
+            ValueError: If mTLS configuration is invalid
+        """
+        # Check if any mTLS options are specified
+        has_cert_key = "client_cert" in tls or "client_key" in tls
+        has_pem = "client_pem" in tls
+        has_pfx = "client_pfx" in tls
+        
+        # Count how many mTLS methods are specified
+        methods_specified = sum([has_cert_key, has_pem, has_pfx])
+        
+        if methods_specified == 0:
+            # No mTLS configuration, this is fine
+            return
+        
+        if methods_specified > 1:
+            raise ValueError(
+                "Multiple mTLS certificate formats specified. "
+                "Use only ONE of: (client_cert + client_key), client_pem, or client_pfx"
+            )
+        
+        # Validate cert + key pair
+        if has_cert_key:
+            if "client_cert" not in tls or "client_key" not in tls:
+                raise ValueError(
+                    "mTLS with separate cert/key requires both 'client_cert' and 'client_key'"
+                )
+            
+            # Note: We don't validate file existence here because paths may contain
+            # templates (env(), argv()) that won't be resolved until runtime
+        
+        # Validate PEM format
+        if has_pem:
+            if not isinstance(tls["client_pem"], str):
+                raise ValueError("client_pem must be a string path")
+        
+        # Validate PKCS12 format
+        if has_pfx:
+            if not isinstance(tls["client_pfx"], str):
+                raise ValueError("client_pfx must be a string path")
