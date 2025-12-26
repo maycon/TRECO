@@ -51,6 +51,7 @@ class BoundaryExtractor(BaseExtractor):
         Args:
             response: HTTP response object
             pattern: Boundary pattern in format "left|||right"
+            context: Optional execution context (not used by this extractor)
             separator: Separator between boundaries (default: '|||')
 
         Returns:

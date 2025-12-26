@@ -132,16 +132,26 @@ class JWTExtractor(BaseExtractor):
             if check == 'expired':
                 return True
             logger.error(f"[JWTExtractor] JWT token has expired")
-            if 'default' in pattern:
-                return pattern['default']
-            raise
+            return self._get_default_value(pattern)
         except jwt.InvalidTokenError as e:
             if check == 'valid':
                 return False
             logger.error(f"[JWTExtractor] Invalid JWT: {e}")
-            if 'default' in pattern:
-                return pattern['default']
-            raise ValueError(f"Invalid JWT: {e}")
+            return self._get_default_value(pattern)
+    
+    def _get_default_value(self, pattern: Dict[str, Any]) -> Any:
+        """
+        Get the default value from pattern configuration.
+        
+        Args:
+            pattern: Pattern configuration dict
+            
+        Returns:
+            Default value if specified, None otherwise
+        """
+        if 'default' in pattern:
+            return pattern['default']
+        return None
     
     def _resolve_source(self, source: str, context: Dict[str, Any]) -> Optional[str]:
         """
