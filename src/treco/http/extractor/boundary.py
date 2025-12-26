@@ -5,7 +5,7 @@ Extracts data between left and right delimiters from HTTP responses.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
 
@@ -42,6 +42,7 @@ class BoundaryExtractor(BaseExtractor):
         self, 
         response: ResponseProtocol, 
         pattern: str,
+        context: Optional[Dict] = None,
         separator: str = BOUNDARY_SEPARATOR
     ) -> Optional[Any]:
         """
@@ -50,6 +51,7 @@ class BoundaryExtractor(BaseExtractor):
         Args:
             response: HTTP response object
             pattern: Boundary pattern in format "left|||right"
+            context: Optional execution context (not used by this extractor)
             separator: Separator between boundaries (default: '|||')
 
         Returns:

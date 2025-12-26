@@ -332,6 +332,56 @@
                                                 }
                                             },
                                             "additionalProperties": false
+                                        },
+                                        {
+                                            "type": "object",
+                                            "required": [
+                                                "type",
+                                                "source"
+                                            ],
+                                            "properties": {
+                                                "type": {
+                                                    "const": "jwt",
+                                                    "description": "JWT extractor type"
+                                                },
+                                                "source": {
+                                                    "type": "string",
+                                                    "description": "JWT token source (variable reference)"
+                                                },
+                                                "claim": {
+                                                    "type": "string",
+                                                    "description": "Specific claim to extract from JWT"
+                                                },
+                                                "part": {
+                                                    "type": "string",
+                                                    "enum": ["header", "payload", "signature"],
+                                                    "description": "JWT part to extract"
+                                                },
+                                                "check": {
+                                                    "type": "string",
+                                                    "enum": ["expired", "algorithm", "valid"],
+                                                    "description": "Validation check to perform"
+                                                },
+                                                "verify": {
+                                                    "type": "boolean",
+                                                    "description": "Whether to verify JWT signature"
+                                                },
+                                                "secret": {
+                                                    "type": "string",
+                                                    "description": "Secret for HMAC or public key for RSA verification"
+                                                },
+                                                "algorithms": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": "Allowed algorithms for verification"
+                                                },
+                                                "default": {
+                                                    "description": "Default value if extraction fails"
+                                                }
+                                            },
+                                            "additionalProperties": false
                                         }
                                     ]
                                 }

@@ -403,14 +403,23 @@ class ConfigValidator:
                     "must be a string or a dictionary."
                 )
 
-            if "pattern" not in pattern:
-                raise ValueError(
-                    f"State '{state_name}' extractor for variable '{var_name}' "
-                    "must have 'pattern' fields."
-                )
-
             # Validate pattern_type
             pattern_type = pattern.get("type", "regex")
+            
+            # JWT extractor uses 'source' instead of 'pattern'
+            if pattern_type == "jwt":
+                if "source" not in pattern:
+                    raise ValueError(
+                        f"State '{state_name}' JWT extractor for variable '{var_name}' "
+                        "must have 'source' field."
+                    )
+            else:
+                # Other extractors require 'pattern' field
+                if "pattern" not in pattern:
+                    raise ValueError(
+                        f"State '{state_name}' extractor for variable '{var_name}' "
+                        "must have 'pattern' fields."
+                    )
 
             if not get_extractor(pattern_type):
                 valid_types = ", ".join(list(ExtractorRegistry.get_registered_types()))

@@ -874,7 +874,7 @@ states:
 
 ## All Available Extractors
 
-TRECO provides 7 different extractors for parsing HTTP responses.
+TRECO provides 8 different extractors for parsing HTTP responses.
 
 ### 1. JSONPath Extractor (`jpath`)
 
@@ -994,7 +994,139 @@ extract:
     pattern: "_ga"
 ```
 
-### 7. Default Values
+### 7. JWT Extractor (`jwt`)
+
+Decode and extract data from JSON Web Tokens (JWT). Perfect for extracting user information, checking token expiration, and validating JWT structure in API security testing.
+
+**Extract Specific Claims:**
+
+```yaml
+extract:
+  user_id:
+    type: jwt
+    source: "{{ access_token }}"
+    claim: sub
+  
+  user_role:
+    type: jwt
+    source: "{{ access_token }}"
+    claim: role
+  
+  email:
+    type: jwt
+    source: "{{ access_token }}"
+    claim: email
+```
+
+**Extract JWT Parts:**
+
+```yaml
+extract:
+  # Get entire payload
+  jwt_payload:
+    type: jwt
+    source: "{{ token }}"
+    part: payload
+  
+  # Get header (algorithm, type, etc.)
+  jwt_header:
+    type: jwt
+    source: "{{ token }}"
+    part: header
+  
+  # Get signature
+  jwt_signature:
+    type: jwt
+    source: "{{ token }}"
+    part: signature
+```
+
+**Validation Checks:**
+
+```yaml
+extract:
+  # Check if token has expired
+  is_expired:
+    type: jwt
+    source: "{{ token }}"
+    check: expired
+  
+  # Get algorithm (HS256, RS256, etc.)
+  algorithm:
+    type: jwt
+    source: "{{ token }}"
+    check: algorithm
+  
+  # Check if structure is valid
+  is_valid:
+    type: jwt
+    source: "{{ token }}"
+    check: valid
+```
+
+**With Signature Verification:**
+
+```yaml
+extract:
+  verified_payload:
+    type: jwt
+    source: "{{ token }}"
+    part: payload
+    verify: true
+    secret: "{{ jwt_secret }}"
+    algorithms: ["HS256", "HS512"]
+```
+
+**Common JWT Claims:**
+- `sub` - Subject (usually user ID)
+- `iss` - Issuer
+- `aud` - Audience
+- `exp` - Expiration timestamp
+- `nbf` - Not Before timestamp
+- `iat` - Issued At timestamp
+- `jti` - JWT ID
+- `role`, `roles` - User role(s)
+- `permissions` - User permissions
+- `email`, `username` - User identity
+
+**Security Testing Example:**
+
+```yaml
+states:
+  analyze_jwt:
+    request: |
+      GET /api/protected HTTP/1.1
+      Authorization: Bearer {{ token }}
+    
+    extract:
+      algorithm:
+        type: jwt
+        source: "{{ token }}"
+        check: algorithm
+      
+      is_expired:
+        type: jwt
+        source: "{{ token }}"
+        check: expired
+      
+      user_role:
+        type: jwt
+        source: "{{ token }}"
+        claim: role
+    
+    logger:
+      on_state_leave: |
+        {% if algorithm == 'none' %}
+          🚨 CRITICAL: JWT uses 'none' algorithm!
+        {% elif algorithm == 'HS256' %}
+          ⚠ WARNING: JWT uses symmetric algorithm
+        {% endif %}
+        {% if is_expired %}
+          🚨 Token is expired but still accepted!
+        {% endif %}
+```
+
+### 8. Default Values
 
 All extractors support default values:
 
@@ -1004,6 +1136,12 @@ extract:
     type: jpath
     pattern: "$.optional.field"
     default: "not_found"  # Used if extraction fails
+  
+  optional_claim:
+    type: jwt
+    source: "{{ token }}"
+    claim: optional_claim
+    default: "no_claim"  # Used if claim not found
 ```
 
 ---

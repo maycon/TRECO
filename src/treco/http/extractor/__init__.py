@@ -43,7 +43,7 @@ def get_extractor(pattern_type: str) -> BaseExtractor:
 
 
 def extract_all(
-    response: ResponseProtocol, extracts: Dict[str, ExtractPattern]
+    response: ResponseProtocol, extracts: Dict[str, ExtractPattern], context: Optional[Dict] = None
 ) -> Dict[str, Optional[str]]:
     """
     Run all patterns in `extracts` against `response`.
@@ -51,6 +51,7 @@ def extract_all(
     Args:
         response: HTTP response object
         extracts: Dict[logical_name, ExtractPattern]
+        context: Optional execution context for accessing variables
         
     Returns:
         Dictionary mapping logical names to extracted values
@@ -59,7 +60,7 @@ def extract_all(
 
     for name, pattern in extracts.items():
         extractor = get_extractor(pattern.pattern_type)
-        results[name] = extractor.extract(response, pattern.pattern_data)
+        results[name] = extractor.extract(response, pattern.pattern_data, context)
 
     return results
 

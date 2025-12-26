@@ -140,7 +140,7 @@ class StateExecutor:
             logger.debug(f"[StateExecutor] Response received:\n{response.text}")
 
             # Extract data from response
-            extracted = extract_all(response, state.extract)
+            extracted = extract_all(response, state.extract, context.to_dict())
 
             if extracted:
                 logger.info(f"[StateExecutor] Extracted variables: {list(extracted.keys())}")
