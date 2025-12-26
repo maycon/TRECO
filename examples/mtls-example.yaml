@@ -1,0 +1,101 @@
+metadata:
+  name: "mTLS Protected API - Race Condition Test"
+  version: "1.0"
+  author: "Security Team"
+  vulnerability: "CWE-362"
+
+target:
+  host: secure-api.internal
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: true
+    # Option 1: Separate certificate and key files
+    client_cert: "./certs/client.crt"
+    client_key: "./certs/client.key"
+    client_key_password: "{{ env('CLIENT_KEY_PASSWORD') }}"
+
+    # Option 2: Combined PEM file (comment out option 1 if using this)
+    # client_pem: "./certs/client.pem"
+
+    # Option 3: PKCS12 format (comment out other options if using this)
+    # Note: PKCS12 requires conversion to PEM format
+    # client_pfx: "./certs/client.pfx"
+    # client_pfx_password: "{{ env('PFX_PASSWORD') }}"
+
+entrypoint:
+  state: race_transfer
+  input:
+    amount: 1000
+    from_account: "ACC-123"
+    to_account: "ACC-456"
+
+states:
+  race_transfer:
+    description: "Race condition on certificate-authenticated endpoint"
+    options:
+      proxy_bypass: false
+    race:
+      threads: 10
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+    request: |
+      POST /api/v1/transfer HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      Authorization: Bearer {{ token }}
+      
+      {
+        "from": "{{ from_account }}",
+        "to": "{{ to_account }}",
+        "amount": {{ amount }}
+      }
+    extract:
+      transaction_id:
+        type: jpath
+        pattern: "$.transaction_id"
+      status:
+        type: jpath
+        pattern: "$.status"
+    next:
+      - when:
+          - status: 200
+        goto: verify_balance
+      - when:
+          - status: 429
+        goto: rate_limited
+      - otherwise: true
+        goto: error_state
+
+  verify_balance:
+    description: "Check if race condition caused double-spending"
+    request: |
+      GET /api/v1/account/{{ to_account }}/balance HTTP/1.1
+      Host: {{ target.host }}
+      Authorization: Bearer {{ token }}
+    extract:
+      final_balance:
+        type: jpath
+        pattern: "$.balance"
+    next:
+      - when:
+          - status: 200
+        goto: end
+
+  rate_limited:
+    description: "Rate limit detected"
+    request: |
+      GET /api/v1/status HTTP/1.1
+      Host: {{ target.host }}
+    next:
+      - on_status: 200
+        goto: end
+
+  error_state:
+    description: "Error occurred during transfer"
+    next:
+      - otherwise: true
+        goto: end
+
+  end:
+    description: "Test completed"

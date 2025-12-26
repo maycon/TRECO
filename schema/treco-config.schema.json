@@ -1,30 +1,158 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://github.com/maycon/TRECO/schema/treco-config.schema.json",
-    "title": "TRECO Attack Configuration",
-    "description": "Configuration schema for TRECO race condition attacks",
-    "type": "object",
-    "required": [
-        "metadata",
-        "target",
-        "entrypoint",
-        "states"
-    ],
-    "properties": {
-        "metadata": {
-            "type": "object",
-            "description": "Attack metadata information",
-            "required": [
-                "name",
-                "version",
-                "author",
-                "vulnerability"
-            ],
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Human-readable name of the attack scenario"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/maycon/TRECO/schema/treco-config.schema.json",
+  "title": "TRECO Attack Configuration",
+  "description": "Configuration schema for TRECO race condition attacks",
+  "type": "object",
+  "required": ["metadata", "target", "entrypoint", "states"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "Attack metadata information",
+      "required": ["name", "version", "author", "vulnerability"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable name of the attack scenario"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+",
+          "description": "Version number (semver format, e.g., '1.0', '2.1.0')"
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Author name or organization"
+        },
+        "vulnerability": {
+          "type": "string",
+          "pattern": "^(CVE|CWE)-\\d+",
+          "description": "CVE or CWE identifier (e.g., 'CWE-362', 'CVE-2024-1234')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional detailed description of the attack"
+        }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "description": "Target server configuration",
+      "required": ["host", "port"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target hostname or IP address (supports Jinja2 templates)"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Target port number"
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 20,
+          "description": "Default number of threads for non-race states"
+        },
+        "reuse_connection": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to reuse TCP connections across requests"
+        },
+        "tls": {
+          "type": "object",
+          "description": "TLS/SSL configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable HTTPS/TLS"
+            },
+            "verify_cert": {
+              "type": "boolean",
+              "default": false,
+              "description": "Verify SSL certificates (disable for self-signed certs)"
+            },
+            "client_cert": {
+              "type": "string",
+              "description": "Path to client certificate file for mTLS (supports Jinja2 templates)"
+            },
+            "client_key": {
+              "type": "string",
+              "description": "Path to client private key file for mTLS (supports Jinja2 templates)"
+            },
+            "client_key_password": {
+              "type": "string",
+              "description": "Password for encrypted client key (supports Jinja2 templates like env())"
+            },
+            "client_pem": {
+              "type": "string",
+              "description": "Path to combined PEM file containing cert and key for mTLS (supports Jinja2 templates)"
+            },
+            "client_pfx": {
+              "type": "string",
+              "description": "Path to PKCS12 file (.pfx/.p12) for mTLS (supports Jinja2 templates)"
+            },
+            "client_pfx_password": {
+              "type": "string",
+              "description": "Password for PKCS12 file (supports Jinja2 templates like env())"
+            }
+          },
+          "additionalProperties": false
+        },
+        "http": {
+          "type": "object",
+          "description": "HTTP client configuration",
+          "properties": {
+            "follow_redirects": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to follow HTTP redirects"
+            },
+            "timeout": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "description": "Request timeout in seconds"
+            }
+          },
+          "additionalProperties": false
+        },
+        "proxy": {
+          "type": "object",
+          "description": "Proxy server configuration",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Proxy hostname or IP address"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Proxy port number"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["http", "https", "socks5"],
+              "default": "http",
+              "description": "Proxy protocol type"
+            },
+            "auth": {
+              "type": "object",
+              "description": "Proxy authentication credentials",
+              "required": ["username", "password"],
+              "properties": {
+                "username": {
+                  "type": "string",
+                  "description": "Proxy username"
                 },
                 "version": {
                     "type": "string",
