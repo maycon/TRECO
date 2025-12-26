@@ -1,0 +1,335 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/maycon/TRECO/schema/treco-config.schema.json",
+  "title": "TRECO Attack Configuration",
+  "description": "Configuration schema for TRECO race condition attacks",
+  "type": "object",
+  "required": ["metadata", "target", "entrypoint", "states"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "Attack metadata information",
+      "required": ["name", "version", "author", "vulnerability"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable name of the attack scenario"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+",
+          "description": "Version number (semver format, e.g., '1.0', '2.1.0')"
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Author name or organization"
+        },
+        "vulnerability": {
+          "type": "string",
+          "pattern": "^(CVE|CWE)-\\d+",
+          "description": "CVE or CWE identifier (e.g., 'CWE-362', 'CVE-2024-1234')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional detailed description of the attack"
+        }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "description": "Target server configuration",
+      "required": ["host", "port"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target hostname or IP address (supports Jinja2 templates)"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Target port number"
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 20,
+          "description": "Default number of threads for non-race states"
+        },
+        "reuse_connection": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to reuse TCP connections across requests"
+        },
+        "tls": {
+          "type": "object",
+          "description": "TLS/SSL configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable HTTPS/TLS"
+            },
+            "verify_cert": {
+              "type": "boolean",
+              "default": false,
+              "description": "Verify SSL certificates (disable for self-signed certs)"
+            }
+          },
+          "additionalProperties": false
+        },
+        "http": {
+          "type": "object",
+          "description": "HTTP client configuration",
+          "properties": {
+            "follow_redirects": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to follow HTTP redirects"
+            },
+            "timeout": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "description": "Request timeout in seconds"
+            }
+          },
+          "additionalProperties": false
+        },
+        "proxy": {
+          "type": "object",
+          "description": "Proxy server configuration",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Proxy hostname or IP address"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Proxy port number"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["http", "https", "socks5"],
+              "default": "http",
+              "description": "Proxy protocol type"
+            },
+            "auth": {
+              "type": "object",
+              "description": "Proxy authentication credentials",
+              "required": ["username", "password"],
+              "properties": {
+                "username": {
+                  "type": "string",
+                  "description": "Proxy username"
+                },
+                "password": {
+                  "type": "string",
+                  "description": "Proxy password"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "entrypoint": {
+      "type": "object",
+      "description": "Defines the initial state and variables for execution",
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the starting state"
+        },
+        "input": {
+          "type": "object",
+          "description": "Initial variable definitions (supports Jinja2 templates)",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "states": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "State machine definition - maps state names to state configurations",
+      "patternProperties": {
+        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+          "type": "object",
+          "description": "A single state in the attack flow",
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Human-readable description of what this state does"
+            },
+            "request": {
+              "type": "string",
+              "description": "HTTP request template in raw HTTP format (supports Jinja2 templates)"
+            },
+            "options": {
+              "type": "object",
+              "description": "Additional execution options for the state",
+              "properties": {
+                "proxy_bypass": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Bypass proxy for this state only"
+                }
+              },
+              "additionalProperties": false
+            },
+            "race": {
+              "type": "object",
+              "description": "Race condition configuration - makes this a race state",
+              "properties": {
+                "threads": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 1000,
+                  "default": 20,
+                  "description": "Number of concurrent threads for this race"
+                },
+                "sync_mechanism": {
+                  "type": "string",
+                  "enum": ["barrier", "countdown_latch", "semaphore"],
+                  "default": "barrier",
+                  "description": "Synchronization mechanism (barrier recommended for races)"
+                },
+                "connection_strategy": {
+                  "type": "string",
+                  "enum": ["preconnect", "lazy", "pooled", "multiplexed"],
+                  "default": "preconnect",
+                  "description": "Connection strategy (preconnect/multiplexed recommended for best timing)"
+                },
+                "reuse_connections": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Whether threads reuse connections"
+                },
+                "thread_propagation": {
+                  "type": "string",
+                  "enum": ["single", "parallel"],
+                  "default": "single",
+                  "description": "How to propagate state after race (single: one thread continues, parallel: all threads continue)"
+                }
+              },
+              "additionalProperties": false
+            },
+            "extract": {
+              "type": "object",
+              "description": "Extract values from response into variables",
+              "patternProperties": {
+                "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "description": "Simple regex pattern (shorthand)"
+                    },
+                    {
+                      "type": "object",
+                      "required": ["type", "pattern"],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["regex", "jpath", "xpath", "boundary", "header", "cookie", "jinja2"],
+                          "description": "Extractor type"
+                        },
+                        "pattern": {
+                          "type": "string",
+                          "description": "Extraction pattern (syntax depends on type)"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "logger": {
+              "type": "object",
+              "description": "Logging configuration for state execution",
+              "properties": {
+                "on_state_enter": {
+                  "type": "string",
+                  "description": "Template string to log when entering the state (supports Jinja2)"
+                },
+                "on_state_leave": {
+                  "type": "string",
+                  "description": "Template string to log when leaving the state (supports Jinja2)"
+                },
+                "on_thread_enter": {
+                  "type": "string",
+                  "description": "Template string to log when a thread enters (race states only)"
+                },
+                "on_thread_leave": {
+                  "type": "string",
+                  "description": "Template string to log when a thread leaves (race states only)"
+                }
+              },
+              "additionalProperties": false
+            },
+            "next": {
+              "type": "array",
+              "description": "State transitions based on HTTP response",
+              "items": {
+                "type": "object",
+                "required": ["goto"],
+                "properties": {
+                  "on_status": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 100,
+                        "maximum": 599,
+                        "description": "HTTP status code to match"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 599
+                        },
+                        "minItems": 1,
+                        "description": "List of HTTP status codes to match"
+                      }
+                    ],
+                    "description": "HTTP status code(s) that trigger this transition (omit for unconditional transition)"
+                  },
+                  "goto": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Target state name"
+                  },
+                  "delay_ms": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Optional delay before transition (milliseconds)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

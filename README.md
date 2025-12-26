@@ -46,6 +46,7 @@ TRECO enables security researchers to orchestrate highly precise concurrent HTTP
 - **📊 Automatic Analysis**: Race window calculation, vulnerability detection, and detailed statistics
 - **🔌 Extensible Architecture**: Plugin-based extractors and connection strategies
 - **🖥️ Multi-Platform**: Linux, macOS, and Windows (WSL recommended)
+- **✅ JSON Schema Validation**: Catch configuration errors early with IDE integration and real-time validation
 
 ### Advanced Features
 
@@ -74,6 +75,12 @@ TRECO also provides additional advanced features for specialized testing scenari
 - All 7 template filters (TOTP, MD5, SHA1, SHA256, env, argv, average)
 - Performance considerations
 - Troubleshooting advanced features
+
+📖 **See [docs/SCHEMA_VALIDATION.md](docs/SCHEMA_VALIDATION.md) for JSON Schema validation:**
+- IDE setup instructions (VSCode, PyCharm)
+- Pre-commit hook configuration
+- CI/CD integration examples
+- Common validation errors and fixes
 
 ---
 
@@ -238,6 +245,25 @@ treco test.yaml
 ```
 
 If you see successful output, TRECO is installed correctly!
+
+### Validate Configuration
+
+Before running attacks, you can validate your configuration files:
+
+```bash
+# Validate configuration without executing
+treco --validate-only attack.yaml
+```
+
+This will check for:
+- ✅ Valid YAML syntax
+- ✅ Required fields present
+- ✅ Correct data types
+- ✅ Valid enum values (sync mechanisms, connection strategies, etc.)
+- ✅ State references are valid
+- ✅ Extractor patterns are correct
+
+See [docs/SCHEMA_VALIDATION.md](docs/SCHEMA_VALIDATION.md) for IDE setup and advanced validation features.
 
 ---
 

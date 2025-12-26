@@ -27,17 +27,19 @@ from treco.models import (
     LoggerConfig,
 )
 from treco.parser.validator import ConfigValidator
+from treco.parser.schema_validator import SchemaValidator, SchemaValidationError
 
 
 class YAMLLoader:
     """
     Loads and parses YAML configuration files into Config objects.
 
-    The loader:
+    The loader performs layered validation:
     1. Reads the YAML file
-    2. Validates structure using ConfigValidator
-    3. Converts dictionaries into dataclasses
-    4. Returns a fully-typed Config object
+    2. Schema validation (structure, types, patterns)
+    3. Semantic validation (state references, extractor patterns)
+    4. Converts dictionaries into dataclasses
+    5. Returns a fully-typed Config object
 
     Example:
         loader = YAMLLoader()
@@ -45,9 +47,16 @@ class YAMLLoader:
         logger.info(config.metadata.name)  # "Race Condition PoC - Fund Redemption"
     """
 
-    def __init__(self):
-        """Initialize the YAML loader with a validator."""
-        self.validator = ConfigValidator()
+    def __init__(self, enable_schema_validation: bool = True):
+        """
+        Initialize the YAML loader with validators.
+        
+        Args:
+            enable_schema_validation: Whether to enable JSON Schema validation (default: True)
+        """
+        self.enable_schema_validation = enable_schema_validation
+        self.schema_validator = SchemaValidator() if enable_schema_validation else None
+        self.semantic_validator = ConfigValidator()
         self.engine = TemplateEngine()
 
     def load(self, filepath: str) -> Config:
@@ -63,7 +72,8 @@ class YAMLLoader:
         Raises:
             FileNotFoundError: If file doesn't exist
             yaml.YAMLError: If YAML is malformed
-            ValueError: If validation fails
+            SchemaValidationError: If schema validation fails
+            ValueError: If semantic validation fails
         """
         path = Path(filepath)
         if not path.exists():
@@ -73,8 +83,16 @@ class YAMLLoader:
         with open(filepath, "r", encoding="utf-8") as f:
             raw_data = yaml.safe_load(f)
 
-        # Validate structure
-        self.validator.validate(raw_data)
+        # Layer 1: Schema validation (structure, types, patterns)
+        if self.enable_schema_validation:
+            logger.debug("Running schema validation...")
+            self.schema_validator.validate(raw_data)
+            logger.debug("Schema validation passed")
+
+        # Layer 2: Semantic validation (state references, extractor patterns)
+        logger.debug("Running semantic validation...")
+        self.semantic_validator.validate(raw_data)
+        logger.debug("Semantic validation passed")
 
         # Convert to typed objects
         return self._build_config(raw_data)
