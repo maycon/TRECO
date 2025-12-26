@@ -1,0 +1,149 @@
+# ============================================================================
+# TRECO Configuration: Multi-Condition When Blocks Demo
+# ============================================================================
+#
+# Demonstrates the new multi-condition when blocks feature with various
+# condition types including status codes, body matching, header checks,
+# and Jinja2 expressions.
+#
+# Usage:
+#   treco examples/when-blocks-demo.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "When Blocks Demo"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "Demo"
+  description: |
+    Demonstrates multi-condition when blocks with various condition types.
+
+target:
+  host: "httpbin.org"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: true
+  http:
+    follow_redirects: false
+
+entrypoint:
+  state: check_status
+  input:
+    expected_role: "admin"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # --------------------------------------------------------------------------
+  # Status Code Matching Demo
+  # --------------------------------------------------------------------------
+  check_status:
+    description: "Test basic status code matching"
+    request: |
+      GET /status/200 HTTP/1.1
+      Host: {{ target.host }}
+
+    extract:
+      response_code:
+        type: regex
+        pattern: "HTTP/\\d\\.\\d (\\d+)"
+
+    next:
+      # Multi-condition: status + extracted variable
+      - when:
+          - status: 200
+          - condition: "{{ response_code == '200' }}"
+        goto: check_json
+
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Body Content Matching Demo
+  # --------------------------------------------------------------------------
+  check_json:
+    description: "Test JSON response and body matching"
+    request: |
+      GET /json HTTP/1.1
+      Host: {{ target.host }}
+
+    extract:
+      slide_type:
+        type: jpath
+        pattern: "$.slideshow.slides[0].type"
+
+    next:
+      # Status + body content check
+      - when:
+          - status: 200
+          - body_contains: '"slideshow"'
+        goto: check_headers
+
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Header Checking Demo
+  # --------------------------------------------------------------------------
+  check_headers:
+    description: "Test header-based conditions"
+    request: |
+      GET /response-headers?X-Custom-Header=test-value HTTP/1.1
+      Host: {{ target.host }}
+
+    next:
+      # Header existence check
+      - when:
+          - status: 200
+          - header_exists: "Content-Type"
+        goto: check_user_agent
+
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Complex Condition Demo
+  # --------------------------------------------------------------------------
+  check_user_agent:
+    description: "Test complex multi-condition logic"
+    request: |
+      GET /user-agent HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: TRECO/1.0
+
+    extract:
+      user_agent:
+        type: jpath
+        pattern: "$.user-agent"
+
+    next:
+      # Multiple conditions with Jinja2 expression
+      - when:
+          - status: 200
+          - condition: "{{ 'TRECO' in user_agent }}"
+          - body_contains: "user-agent"
+        goto: success
+
+      - otherwise:
+        goto: error
+
+  # --------------------------------------------------------------------------
+  # Terminal States
+  # --------------------------------------------------------------------------
+  success:
+    description: "All when block conditions passed!"
+    next:
+      - goto: end
+
+  error:
+    description: "A condition check failed"
+    next:
+      - goto: end
+
+  end:
+    description: "Demo complete"

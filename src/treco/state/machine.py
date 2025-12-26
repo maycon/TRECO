@@ -17,7 +17,8 @@ from treco.template import engine
 
 from treco.models import Config, State, ExecutionContext
 from treco.template import TemplateEngine
-from treco.state.executor import StateExecutor
+from treco.state.executor import StateExecutor, ExecutionResult
+from treco.state.conditions import ConditionEvaluator
 
 
 class StateMachine:
@@ -27,7 +28,7 @@ class StateMachine:
     The machine:
     1. Starts at the configured entrypoint state
     2. Executes each state via StateExecutor
-    3. Evaluates transitions based on HTTP status
+    3. Evaluates transitions based on HTTP status or when blocks
     4. Navigates to the next state
     5. Continues until reaching a terminal state (end, error)
 
@@ -52,6 +53,7 @@ class StateMachine:
         self.context = context
         self.executor = executor
         self.engine = TemplateEngine()
+        self.condition_evaluator = ConditionEvaluator(self.engine)
         self.current_state: Optional[str] = None
         self.history: list = []  # Track visited states for debugging
 
@@ -212,19 +214,19 @@ class StateMachine:
             rendered_value = renders[tp](value_template) if tp in renders else None
             self.context.set(key, rendered_value if rendered_value else value_template)
 
-    def _get_next_state(self, state: State, result) -> str:
+    def _get_next_state(self, state: State, result: ExecutionResult) -> str:
         """
         Determine the next state based on execution result.
 
         Args:
             state: Current state
-            result: Execution result with status code
+            result: Execution result with status code and response
 
         Returns:
             Name of next state to execute
         """
         # Find matching transition
-        transition = self._find_transition(state, result.status)
+        transition = self._find_transition(state, result)
 
         if transition:
             return transition.goto
@@ -235,18 +237,46 @@ class StateMachine:
         )
         return "error"
 
-    def _find_transition(self, state: State, status_code: int):
+    def _find_transition(self, state: State, result: ExecutionResult):
         """
-        Find a matching transition for the given status code.
+        Find a matching transition for the given execution result.
+
+        Supports both legacy on_status transitions and new when block transitions.
 
         Args:
             state: Current state
-            status_code: HTTP status code from result
+            result: Execution result with status code, response, etc.
 
         Returns:
             Matching Transition object or None
         """
+        # Try to get the response object from the executor's last response
+        # This is needed for when block evaluation
+        response = getattr(self.executor, '_last_response', None)
+        
         for transition in state.next:
-            if status_code in transition.on_status:
+            # Check when block conditions
+            if transition.when is not None:
+                if response is None:
+                    logger.warning("[StateMachine] No response available for when block evaluation")
+                    continue
+                
+                # Evaluate all conditions in the when block (AND logic)
+                if self.condition_evaluator.evaluate_when_block(
+                    transition.when, 
+                    response, 
+                    self.context,
+                    response_time_ms=getattr(result, 'response_time_ms', None)
+                ):
+                    return transition
+            
+            # Check otherwise (catch-all)
+            elif transition.otherwise:
                 return transition
+            
+            # Legacy on_status check
+            elif transition.on_status is not None and result.status in transition.on_status:
+                return transition
+        
+        return None
         return None

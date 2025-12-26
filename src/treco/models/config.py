@@ -139,14 +139,23 @@ class Transition:
     """
     State transition rule based on HTTP response.
 
+    Supports both legacy on_status format and new when blocks:
+    - Legacy: on_status list with goto
+    - When blocks: list of condition dictionaries with goto
+    - Otherwise: catch-all transition
+
     Attributes:
-        on_status: HTTP status code(s) that triggers this transition
+        on_status: HTTP status code(s) that triggers this transition (legacy)
+        when: List of condition dictionaries for complex transitions
+        otherwise: If True, this is a catch-all transition
         goto: Name of the next state to transition to
         delay_ms: Optional delay in milliseconds before transition
     """
 
-    on_status: List[int]
     goto: str
+    on_status: Optional[List[int]] = None
+    when: Optional[List[Dict[str, Any]]] = None
+    otherwise: bool = False
     delay_ms: int = 0
 
 

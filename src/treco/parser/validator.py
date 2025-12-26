@@ -162,8 +162,18 @@ class ConfigValidator:
                 f"State '{state_name}' transition {idx} references non-existent state: {target_state}"
             )
         
-        # on_status is optional (default 0 = always transition)
-        if "on_status" in transition:
+        # Check if this is a when block transition
+        if "when" in transition:
+            self._validate_when_block(state_name, idx, transition["when"])
+        # Check if this is an otherwise transition
+        elif "otherwise" in transition:
+            # Allow None, True, or boolean values (YAML "- otherwise:" parses as None)
+            if transition["otherwise"] is not None and not isinstance(transition["otherwise"], bool):
+                raise ValueError(
+                    f"State '{state_name}' transition {idx} has invalid otherwise value: must be boolean or null"
+                )
+        # Legacy on_status transition
+        elif "on_status" in transition:
             status = transition["on_status"]
             if isinstance(status, int):
                 status = [status]
@@ -173,6 +183,152 @@ class ConfigValidator:
                     raise ValueError(
                         f"State '{state_name}' transition {idx} has invalid on_status: {s}"
                     )
+        # No condition specified - this is valid for backward compatibility (matches any status)
+    
+    def _validate_when_block(self, state_name: str, transition_idx: int, when_conditions: list) -> None:
+        """
+        Validate when block conditions.
+        
+        Args:
+            state_name: Name of the state
+            transition_idx: Index of the transition
+            when_conditions: List of condition dictionaries
+        """
+        if not isinstance(when_conditions, list):
+            raise ValueError(
+                f"State '{state_name}' transition {transition_idx} 'when' must be a list"
+            )
+        
+        if len(when_conditions) == 0:
+            raise ValueError(
+                f"State '{state_name}' transition {transition_idx} 'when' block cannot be empty"
+            )
+        
+        # Validate each condition in the when block
+        for cond_idx, condition in enumerate(when_conditions):
+            if not isinstance(condition, dict):
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {cond_idx} must be a dictionary"
+                )
+            
+            self._validate_single_condition(state_name, transition_idx, cond_idx, condition)
+    
+    def _validate_single_condition(
+        self, state_name: str, transition_idx: int, condition_idx: int, condition: Dict[str, Any]
+    ) -> None:
+        """Validate a single condition within a when block."""
+        valid_condition_keys = {
+            "status", "status_in", "status_range",
+            "condition",
+            "body_contains", "body_not_contains", "body_matches", "body_equals",
+            "header_exists", "header_not_exists", "header_equals", 
+            "header_contains", "header_matches", "header_compare",
+            "response_time_ms"
+        }
+        
+        # Check that at least one valid condition key is present
+        condition_keys = set(condition.keys())
+        matching_keys = condition_keys & valid_condition_keys
+        
+        if not matching_keys:
+            raise ValueError(
+                f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                f"has no valid condition type. Valid types: {valid_condition_keys}"
+            )
+        
+        # Validate specific condition types
+        if "status" in condition:
+            if not isinstance(condition["status"], int) or condition["status"] < 0:
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"has invalid status: must be non-negative integer"
+                )
+        
+        if "status_in" in condition:
+            if not isinstance(condition["status_in"], list):
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"status_in must be a list"
+                )
+            for s in condition["status_in"]:
+                if not isinstance(s, int) or s < 0:
+                    raise ValueError(
+                        f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                        f"has invalid status in status_in: {s}"
+                    )
+        
+        if "status_range" in condition:
+            if not isinstance(condition["status_range"], list) or len(condition["status_range"]) != 2:
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"status_range must be a list of exactly 2 integers [low, high]"
+                )
+            low, high = condition["status_range"]
+            if not isinstance(low, int) or not isinstance(high, int) or low < 0 or high < 0:
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"status_range values must be non-negative integers"
+                )
+            if low > high:
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"status_range low value must be <= high value"
+                )
+        
+        if "condition" in condition:
+            if not isinstance(condition["condition"], str):
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"'condition' must be a string (Jinja2 expression)"
+                )
+        
+        # Validate header-based conditions that require dict structure
+        for key in ["header_equals", "header_contains", "header_matches"]:
+            if key in condition:
+                if not isinstance(condition[key], dict):
+                    raise ValueError(
+                        f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                        f"'{key}' must be a dictionary with 'name' and 'value'/'pattern' keys"
+                    )
+                if "name" not in condition[key]:
+                    raise ValueError(
+                        f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                        f"'{key}' must have 'name' key"
+                    )
+        
+        if "header_compare" in condition:
+            if not isinstance(condition["header_compare"], dict):
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"'header_compare' must be a dictionary"
+                )
+            required_keys = ["name", "operator", "value"]
+            for key in required_keys:
+                if key not in condition["header_compare"]:
+                    raise ValueError(
+                        f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                        f"'header_compare' missing required key: {key}"
+                    )
+            
+            valid_operators = ["<", "<=", ">", ">=", "==", "!="]
+            if condition["header_compare"]["operator"] not in valid_operators:
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"'header_compare' has invalid operator. Valid: {valid_operators}"
+                )
+        
+        if "response_time_ms" in condition:
+            if not isinstance(condition["response_time_ms"], dict):
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"'response_time_ms' must be a dictionary with 'operator' and 'value'"
+                )
+            if "operator" not in condition["response_time_ms"] or "value" not in condition["response_time_ms"]:
+                raise ValueError(
+                    f"State '{state_name}' transition {transition_idx} condition {condition_idx} "
+                    f"'response_time_ms' must have 'operator' and 'value' keys"
+                )
+
 
 
     def _validate_race_config(self, state_name: str, race: Dict[str, Any]) -> None:
