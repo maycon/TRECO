@@ -6,7 +6,14 @@ This script checks if documentation needs updating when source code changes.
 Can be used as a pre-commit hook or run manually.
 
 Usage:
+    # From repository root
     python scripts/check_docs.py
+    
+    # From any directory
+    cd /path/to/treco
+    python scripts/check_docs.py
+
+Note: This script must be run from the repository root directory.
 """
 
 import os
@@ -23,6 +30,19 @@ YELLOW = '\033[93m'
 BLUE = '\033[94m'
 RESET = '\033[0m'
 
+def find_repo_root() -> Path:
+    """Find the repository root by looking for pyproject.toml."""
+    current = Path.cwd()
+    
+    # Try current directory and parents
+    for parent in [current] + list(current.parents):
+        if (parent / 'pyproject.toml').exists():
+            return parent
+    
+    # If not found, assume current directory
+    print_warning("Could not find repository root. Assuming current directory.")
+    return current
+
 def print_header(msg: str):
     print(f"\n{BLUE}{'=' * 60}{RESET}")
     print(f"{BLUE}{msg}{RESET}")
@@ -37,12 +57,12 @@ def print_warning(msg: str):
 def print_error(msg: str):
     print(f"{RED}✗{RESET} {msg}")
 
-def check_version_consistency() -> Tuple[bool, List[str]]:
+def check_version_consistency(repo_root: Path) -> Tuple[bool, List[str]]:
     """Check if version is consistent across files."""
     issues = []
     
     # Get version from pyproject.toml
-    pyproject_path = Path('pyproject.toml')
+    pyproject_path = repo_root / 'pyproject.toml'
     if not pyproject_path.exists():
         return False, ["pyproject.toml not found"]
     
@@ -54,7 +74,7 @@ def check_version_consistency() -> Tuple[bool, List[str]]:
         pyproject_version = match.group(1)
     
     # Get version from __init__.py
-    init_path = Path('src/treco/__init__.py')
+    init_path = repo_root / 'src' / 'treco' / '__init__.py'
     if not init_path.exists():
         return False, ["src/treco/__init__.py not found"]
     
@@ -76,11 +96,18 @@ def main():
     """Run all documentation checks."""
     print_header("TRECO Documentation Validation")
     
+    # Find repository root
+    repo_root = find_repo_root()
+    print(f"Repository root: {repo_root}\n")
+    
+    # Change to repository root
+    os.chdir(repo_root)
+    
     all_passed = True
     
     # Check version consistency
     print_header("1. Version Consistency")
-    passed, issues = check_version_consistency()
+    passed, issues = check_version_consistency(repo_root)
     if passed:
         print_success("Version is consistent across files")
     else:

@@ -49,13 +49,13 @@ These should be addressed in future updates.
 
 **Issue**: README.md shows different version than pyproject.toml in Project Status section
 
-**Location**: README.md line 2242
-**Shows**: Current Version: 1.2.0
-**Should be**: Current Version: 1.3.1
+**Location**: README.md "Project Status" section
+**Shows**: Previously showed 1.2.0
+**Fixed**: Now shows 1.3.1
 
-**Priority**: LOW - Informational only
+**Priority**: LOW - Fixed in this PR
 
-**Resolution**: Update README or remove hardcoded version
+**Resolution**: ✓ Completed
 
 ---
 

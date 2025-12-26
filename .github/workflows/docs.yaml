@@ -223,6 +223,38 @@ jobs:
           else
             echo "- ❌ CLI not found in cli.rst" >> $GITHUB_STEP_SUMMARY
           fi
+          
+          # Dynamically check public API from __init__.py
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Checking Public API Coverage:" >> $GITHUB_STEP_SUMMARY
+          python3 -c "
+import re
+import sys
+
+# Read __init__.py to find __all__ exports
+try:
+    with open('src/treco/__init__.py') as f:
+        content = f.read()
+        # Find __all__ definition
+        match = re.search(r'__all__\s*=\s*\[(.*?)\]', content, re.DOTALL)
+        if match:
+            exports = re.findall(r'\"([^\"]+)\"', match.group(1))
+            
+            # Check if each export is documented
+            with open('docs/source/api.rst') as doc:
+                doc_content = doc.read()
+            
+            for export in exports:
+                if export in doc_content:
+                    print(f'- ✓ {export} is documented')
+                else:
+                    print(f'- ⚠ {export} may not be documented')
+        else:
+            print('- ℹ No __all__ definition found in __init__.py')
+except Exception as e:
+    print(f'- ⚠ Error checking API coverage: {e}')
+    sys.exit(0)  # Don't fail the workflow
+          " >> $GITHUB_STEP_SUMMARY || true
 
   # =============================================================================
   # Remind about Documentation Updates
@@ -288,27 +320,44 @@ jobs:
         run: |
           echo "Validating YAML configuration examples..."
           
-          # Check schema validation examples
-          if [ -f "examples/basic-race.yaml" ]; then
-            python3 -c "
-            from treco.parser import YAMLLoader
-            import sys
-            try:
-                loader = YAMLLoader()
-                config = loader.load('examples/basic-race.yaml')
-                print('✓ examples/basic-race.yaml is valid')
-            except Exception as e:
-                print(f'❌ examples/basic-race.yaml validation failed: {e}')
-                sys.exit(1)
-            " || true
+          # Find all YAML examples and validate them
+          EXAMPLES_FOUND=0
+          EXAMPLES_VALID=0
+          EXAMPLES_INVALID=0
+          
+          # Check if examples directory exists
+          if [ ! -d "examples" ]; then
+            echo "⚠ No examples directory found"
+            exit 0
           fi
           
-          # Find and validate other YAML examples
-          find examples -name "*.yaml" -o -name "*.yml" | head -5 | while read file; do
+          # Find and validate all YAML files
+          while IFS= read -r file; do
+            EXAMPLES_FOUND=$((EXAMPLES_FOUND + 1))
             echo "Checking $file..."
-            # Basic YAML syntax check
-            python3 -c "import yaml; yaml.safe_load(open('$file'))" && echo "✓ $file syntax valid" || echo "⚠ $file may have issues"
-          done
+            
+            # Try to parse with Python YAML
+            if python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>&1; then
+              echo "✓ $file syntax valid"
+              EXAMPLES_VALID=$((EXAMPLES_VALID + 1))
+            else
+              echo "✗ $file syntax invalid"
+              EXAMPLES_INVALID=$((EXAMPLES_INVALID + 1))
+            fi
+          done < <(find examples -name "*.yaml" -o -name "*.yml")
+          
+          # Summary
+          echo ""
+          echo "Summary: Found $EXAMPLES_FOUND examples, $EXAMPLES_VALID valid, $EXAMPLES_INVALID invalid"
+          
+          if [ $EXAMPLES_INVALID -gt 0 ]; then
+            echo "❌ Some examples have invalid syntax"
+            exit 1
+          elif [ $EXAMPLES_FOUND -eq 0 ]; then
+            echo "⚠ No YAML examples found to validate"
+          else
+            echo "✓ All examples are syntactically valid"
+          fi
 
   # =============================================================================
   # Version Consistency Check
