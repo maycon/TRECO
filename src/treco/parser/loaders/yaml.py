@@ -210,16 +210,36 @@ class YAMLLoader:
         # Build transitions
         transitions = []
         for trans in data.get("next", []):
-            status = trans.get("on_status", 0)
-            status = [status] if isinstance(status, int) else status
-
-            transitions.append(
-                Transition(
-                    on_status=status,
-                    goto=trans["goto"],
-                    delay_ms=trans.get("delay_ms", 0),
+            # Check if this is a when block transition
+            if "when" in trans:
+                transitions.append(
+                    Transition(
+                        when=trans["when"],
+                        goto=trans["goto"],
+                        delay_ms=trans.get("delay_ms", 0),
+                    )
                 )
-            )
+            # Check if this is an otherwise transition
+            elif "otherwise" in trans:
+                transitions.append(
+                    Transition(
+                        otherwise=True,
+                        goto=trans["goto"],
+                        delay_ms=trans.get("delay_ms", 0),
+                    )
+                )
+            # Legacy on_status transition
+            else:
+                status = trans.get("on_status", 0)
+                status = [status] if isinstance(status, int) else status
+
+                transitions.append(
+                    Transition(
+                        on_status=status,
+                        goto=trans["goto"],
+                        delay_ms=trans.get("delay_ms", 0),
+                    )
+                )
 
         if "logger" in data:
             logger_config = self._build_logger(data["logger"])

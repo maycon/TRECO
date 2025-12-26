@@ -51,11 +51,20 @@ TRECO enables security researchers to orchestrate highly precise concurrent HTTP
 
 TRECO also provides additional advanced features for specialized testing scenarios:
 
+- **🔀 Multi-Condition When Blocks**: Complex state transitions with boolean expressions, body matching, and header checks
 - **🌐 Proxy Support**: HTTP, HTTPS, and SOCKS5 proxies with authentication
 - **🚀 HTTP/2 Support**: Testing with HTTP/2 protocol via multiplexed strategy
 - **🔄 Connection Reuse**: Control over TCP connection reuse behavior
 - **↪️ Redirect Handling**: Configurable HTTP redirect following
 - **⏱️ Timeout Configuration**: Global and per-state timeout control
+
+📖 **See [docs/WHEN_BLOCKS.md](docs/WHEN_BLOCKS.md) for multi-condition when blocks documentation:**
+- Status code matching (exact, range, multiple)
+- Jinja2 expression evaluation
+- Body content matching (contains, regex, equals)
+- Header checks (exists, equals, contains, numeric comparison)
+- Response time analysis
+- Complete examples and best practices
 
 📖 **See [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) for complete documentation on:**
 - Proxy configuration and use cases

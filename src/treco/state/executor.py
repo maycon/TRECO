@@ -114,6 +114,7 @@ class StateExecutor:
 
         if not state.request:
             logger.info(f"[StateExecutor] Skipping state '{state.name}' with no request")
+            self._last_response = None
             return ExecutionResult(
                 state_name=state.name,
                 status=0,
@@ -130,6 +131,9 @@ class StateExecutor:
             logger.debug(f"[StateExecutor] Rendered HTTP request for state '{state.name}':\n{http_text}")
             # Send HTTP request
             response = self.http_client.send(http_text, state.should_bypass_proxy())
+            
+            # Store the response for when block evaluation
+            self._last_response = response
 
             logger.info(f"[StateExecutor] Response status: {response.status_code}")
             logger.debug(f"[StateExecutor] Response headers:\n{response.headers}")
@@ -156,5 +160,7 @@ class StateExecutor:
             import traceback
 
             traceback.print_exc()
+            
+            self._last_response = None
 
             return ExecutionResult(state_name=state.name, status=0, extracted={}, error=str(e))

