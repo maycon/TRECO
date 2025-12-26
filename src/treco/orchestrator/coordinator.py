@@ -297,10 +297,17 @@ class RaceCoordinator:
         conn_sync = create_sync_mechanism("barrier")
         race_sync = create_sync_mechanism(race_config.sync_mechanism)
 
-        # Create connection strategy with connection sync
+        # Check if state has proxy_bypass option
+        bypass_proxy = state.should_bypass_proxy()
+        
+        if bypass_proxy:
+            logger.info(f"Proxy bypass enabled for state: {state.name}")
+
+        # Create connection strategy with connection sync and proxy bypass
         conn_strategy = create_connection_strategy(
             race_config.connection_strategy,
-            sync=conn_sync
+            sync=conn_sync,
+            bypass_proxy=bypass_proxy,
         )
         
         # Prepare strategies
@@ -378,9 +385,6 @@ class RaceCoordinator:
                 # All preparation is done, just send the prepared request
                 # ════════════════════════════════════════════════════════════
                 start_time_ns = time.perf_counter_ns()
-
-                from pprint import pprint  # noqa: E402
-                pprint(request)
 
                 response = client.send(request)
 

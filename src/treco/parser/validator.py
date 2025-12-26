@@ -124,6 +124,9 @@ class ConfigValidator:
         # if name not in ["end", "error"] and "request" not in data:
         #     raise ValueError(f"State '{name}' missing required field: request")
 
+        if "options" in data:
+            self._validate_state_options(name, data["options"])
+
         # Validate transitions
         if "next" in data:
             for idx, transition in enumerate(data["next"]):
@@ -136,6 +139,15 @@ class ConfigValidator:
         # Validate extractor patterns if present
         if "extract" in data:
             self._validate_extractor_patterns(name, data["extract"])
+
+    def _validate_state_options(self, state_name: str, options: Dict[str, Any]) -> None:
+        """Validate state options."""
+        if "proxy_bypass" in options:
+            proxy_bypass = options["proxy_bypass"]
+            if not isinstance(proxy_bypass, bool):
+                raise ValueError(
+                    f"State '{state_name}' option 'proxy_bypass' must be boolean, got: {type(proxy_bypass)}"
+                )
 
     def _validate_transition(
         self, state_name: str, idx: int, transition: Dict[str, Any], all_states: Set[str]

@@ -10,6 +10,8 @@ from typing import Optional
 
 import httpx
 
+from treco.models.config import ProxyConfig
+
 from ..sync.base import SyncMechanism
 from .base import ConnectionStrategy
 
@@ -46,12 +48,13 @@ class MultiplexedStrategy(ConnectionStrategy):
         response = client.send(request)
     """
 
-    def __init__(self, sync: Optional[SyncMechanism] = None):
+    def __init__(self, sync: Optional[SyncMechanism] = None, bypass_proxy: bool = False):
         """
         Initialize the multiplexed strategy.
         
         Args:
             sync: Sync mechanism (optional, mainly for API consistency)
+            bypass_proxy: Whether to bypass proxy for this strategy
         """
         super().__init__(sync)
         self._client: Optional[httpx.Client] = None
@@ -59,8 +62,10 @@ class MultiplexedStrategy(ConnectionStrategy):
         # Connection configuration (set in _prepare)
         self._base_url: str = ""
         self._verify_cert: bool = True
+        self._proxy = None
         self._timeout: float = 30.0
         self._follow_redirects: bool = False
+        self._bypass_proxy: bool = bypass_proxy
 
     def _prepare(self, num_threads: int, http_client) -> None:
         """
@@ -75,6 +80,7 @@ class MultiplexedStrategy(ConnectionStrategy):
         
         self._base_url = f"{scheme}://{config.host}:{config.port}"
         self._verify_cert = config.tls.verify_cert
+        self._proxy: Optional[ProxyConfig] = config.proxy
         self._follow_redirects = config.http.follow_redirects
         
         # Close existing client if any
@@ -84,6 +90,11 @@ class MultiplexedStrategy(ConnectionStrategy):
             except Exception:
                 pass
         
+        # Respect bypass_proxy flag
+        proxies = None
+        if not self._bypass_proxy and self._proxy:
+            proxies = self._proxy.to_client_proxy()
+        
         # Create single shared HTTP/2 client
         self._client = httpx.Client(
             http2=True,  # Always HTTP/2 for this strategy
@@ -91,6 +102,7 @@ class MultiplexedStrategy(ConnectionStrategy):
             timeout=httpx.Timeout(self._timeout),
             base_url=self._base_url,
             follow_redirects=self._follow_redirects,
+            proxy=proxies,
         )
         
         # Establish connection with a warmup request

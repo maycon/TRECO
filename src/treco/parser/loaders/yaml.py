@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 
 import logging
 
-from treco.models.config import ExtractPattern, HTTPConfig, ProxyAuth, ProxyConfig
+from treco.models.config import ExtractPattern, HTTPConfig, ProxyAuth, ProxyConfig, StateOptions
 from treco.template.engine import TemplateEngine
 
 logger = logging.getLogger(__name__)
@@ -226,8 +226,13 @@ class YAMLLoader:
         else:
             logger_config = LoggerConfig()
 
+        state_options: StateOptions = StateOptions()
+        if "options" in data:
+            options_data = data["options"]
+            state_options.proxy_bypass = options_data.get("proxy_bypass", False)
+
         # Build race config if present
-        race_config = None
+        race_config: Optional[RaceConfig] = None
         if "race" in data:
             race_data = data["race"]
             race_config = RaceConfig(
@@ -245,6 +250,7 @@ class YAMLLoader:
             name=name,
             description=data.get("description", ""),
             request=data.get("request", ""),
+            options=state_options,
             extract=extracts,
             next=transitions,
             logger=logger_config,

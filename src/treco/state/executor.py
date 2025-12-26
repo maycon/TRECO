@@ -127,10 +127,13 @@ class StateExecutor:
             context_input["target"] = self.http_client.config
             http_text = self.template_engine.render(state.request, context_input, context)
 
+            logger.debug(f"[StateExecutor] Rendered HTTP request for state '{state.name}':\n{http_text}")
             # Send HTTP request
-            response = self.http_client.send(http_text)
+            response = self.http_client.send(http_text, state.should_bypass_proxy())
 
             logger.info(f"[StateExecutor] Response status: {response.status_code}")
+            logger.debug(f"[StateExecutor] Response headers:\n{response.headers}")
+            logger.debug(f"[StateExecutor] Response received:\n{response.text}")
 
             # Extract data from response
             extracted = extract_all(response, state.extract)
