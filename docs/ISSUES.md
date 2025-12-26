@@ -5,14 +5,20 @@ These should be addressed in future updates.
 
 ## Critical Issues
 
-### 1. Configuration Section Name Mismatch
+### 1. Configuration Section Name Mismatch ✓ FIXED
 
 **Issue**: Documentation uses `config:` but source code expects `target:`
 
-**Files Affected**:
-- `docs/source/configuration.rst` - Uses `config:` throughout
-- `docs/source/index.rst` - Uses `config:` in examples
-- `README.md` - Uses `config:` in examples
+**Files Fixed**:
+- `docs/source/configuration.rst` - Updated to use `target:`
+- `docs/source/index.rst` - Updated to use `target:`
+- `docs/source/best-practices.rst` - Updated to use `target:`
+- `docs/source/connection-strategies.rst` - Updated to use `target:`
+- `docs/source/contributing.rst` - Updated to use `target:`
+- `docs/source/examples.rst` - Updated to use `target:`
+- `docs/source/quickstart.rst` - Updated to use `target:`
+- `docs/source/troubleshooting.rst` - Updated to use `target:`
+- `README.md` - Updated to use `target:`
 
 **Source Code Reality**:
 - `src/treco/models/config.py` - Defines `target: TargetConfig`
@@ -21,7 +27,7 @@ These should be addressed in future updates.
 
 **Priority**: HIGH - This affects all users
 
-**Resolution**: Update all documentation to use `target:` instead of `config:`
+**Resolution**: ✓ Completed - All documentation now uses `target:` correctly. Template variables `{{ config.xxx }}` preserved as intended.
 
 ### 2. Example Files in Documentation vs Repository
 

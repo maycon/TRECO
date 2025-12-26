@@ -213,7 +213,7 @@ metadata:
   name: "Installation Test"
   version: "1.0"
 
-config:
+target:
   host: "httpbin.org"
   port: 443
   tls:
@@ -280,7 +280,7 @@ metadata:
   author: "Security Researcher"
   vulnerability: "CWE-362"
 
-config:
+target:
   host: "api.example.com"
   port: 443
   tls:
@@ -537,7 +537,7 @@ metadata:
   vulnerability: string     # CVE/CWE ID (optional)
   description: string       # Attack description (optional)
 
-config:
+target:
   host: string              # Target host (required)
   port: integer             # Target port (default: 80/443)
   threads: integer          # Default thread count (optional)
@@ -1023,7 +1023,7 @@ metadata:
   version: "1.0"
   vulnerability: "CWE-362"
 
-config:
+target:
   host: "payment.example.com"
   port: 443
   tls:
@@ -1096,7 +1096,7 @@ metadata:
   version: "1.0"
   vulnerability: "CWE-362"
 
-config:
+target:
   host: "shop.example.com"
   port: 443
   tls:
@@ -1194,7 +1194,7 @@ metadata:
   name: "2FA Authentication Test"
   version: "1.0"
 
-config:
+target:
   host: "secure.example.com"
   port: 443
   tls:
@@ -1264,7 +1264,7 @@ metadata:
   version: "1.0"
   vulnerability: "CWE-770"
 
-config:
+target:
   host: "api.example.com"
   port: 443
   tls:
@@ -1458,7 +1458,7 @@ race:
 
 1. **Increase timeout**:
 ```yaml
-config:
+target:
   timeout: 60  # Seconds
 ```
 
@@ -1482,7 +1482,7 @@ curl -I https://api.example.com
 
 1. **Disable certificate verification** (development only):
 ```yaml
-config:
+target:
   tls:
     enabled: true
     verify_cert: false  # Only for testing!
@@ -1490,7 +1490,7 @@ config:
 
 2. **Provide custom CA certificate**:
 ```yaml
-config:
+target:
   tls:
     enabled: true
     verify_cert: true
@@ -1655,11 +1655,11 @@ Never hardcode credentials in YAML files:
 
 ```yaml
 # Bad
-config:
+target:
   api_key: "secret-key-here"
 
 # Good
-config:
+target:
   api_key: "{{ env('API_KEY') }}"
 ```
 

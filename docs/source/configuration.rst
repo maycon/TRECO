@@ -11,7 +11,7 @@ A complete TRECO configuration file consists of four main sections:
 .. code-block:: yaml
 
    metadata:      # Attack metadata
-   config:        # Server and execution settings
+   target:        # Server and execution settings
    entrypoint:    # Starting point
    states:        # State definitions
 
@@ -50,14 +50,14 @@ The ``metadata`` section provides information about the attack scenario.
      - Yes
      - CVE or CWE identifier (e.g., CWE-362)
 
-Config Section
+Target Section
 --------------
 
-The ``config`` section defines server and execution settings.
+The ``target`` section defines server and execution settings.
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: "api.example.com"
      port: 443
      threads: 20
@@ -379,7 +379,7 @@ Here's a complete configuration example:
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "shop.example.com"
      port: 443
      threads: 20

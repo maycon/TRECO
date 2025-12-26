@@ -52,7 +52,7 @@ For best race condition timing (< 1μs):
 .. code-block:: yaml
 
    # For race conditions, use direct connection
-   config:
+   target:
      host: "api.example.com"
      # proxy:  # Comment out proxy for race testing
 
@@ -134,7 +134,7 @@ Connection Management
 .. code-block:: yaml
 
    # 1. Don't reuse connections for race testing
-   config:
+   target:
      reuse_connection: false  # Default and recommended
    
    race:
@@ -251,7 +251,7 @@ SSL/TLS Configuration
 .. code-block:: yaml
 
    # Always verify certificates in production
-   config:
+   target:
      tls:
        enabled: true
        verify_cert: true  # REQUIRED for production
@@ -261,7 +261,7 @@ SSL/TLS Configuration
 .. code-block:: yaml
 
    # Only disable for internal testing with explicit authorization
-   config:
+   target:
      tls:
        enabled: true
        verify_cert: false  # Document why this is acceptable
@@ -383,7 +383,7 @@ File Organization
      version: "1.0"
      author: "Security Team"
    
-   config:
+   target:
      timeout: 30
      tls:
        enabled: true
@@ -398,13 +398,13 @@ File Organization
 .. code-block:: yaml
 
    # dev-config.yaml
-   config:
+   target:
      host: "dev-api.example.com"
      tls:
        verify_cert: false  # Self-signed certs in dev
    
    # prod-config.yaml
-   config:
+   target:
      host: "api.example.com"
      tls:
        verify_cert: true  # Always verify in prod
@@ -969,7 +969,7 @@ Configuration Validation
    # 2-space indentation
    # Alphabetical ordering when logical
    
-   config:
+   target:
      host: "api.example.com"
      port: 443
      threads: 20

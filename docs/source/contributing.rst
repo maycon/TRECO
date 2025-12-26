@@ -11,7 +11,7 @@ A complete TRECO configuration file consists of four main sections:
 .. code-block:: yaml
 
    metadata:      # Attack metadata
-   config:        # Server and execution settings
+   target:        # Server and execution settings
    entrypoint:    # Starting point
    states:        # State definitions
 
@@ -64,7 +64,7 @@ Basic Configuration
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: "api.example.com"
      port: 443
      threads: 20
@@ -109,7 +109,7 @@ Configure HTTPS and certificate validation:
 
 .. code-block:: yaml
 
-   config:
+   target:
      tls:
        enabled: true
        verify_cert: true
@@ -142,7 +142,7 @@ Configure HTTPS and certificate validation:
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: "internal-api.company.com"
      port: 443
      tls:
@@ -159,7 +159,7 @@ Control HTTP client behavior:
 
 .. code-block:: yaml
 
-   config:
+   target:
      http:
        follow_redirects: true
 
@@ -182,7 +182,7 @@ Control HTTP client behavior:
 
 .. code-block:: yaml
 
-   config:
+   target:
      http:
        follow_redirects: false  # Don't auto-follow
 
@@ -210,7 +210,7 @@ Route requests through HTTP, HTTPS, or SOCKS5 proxies.
 
 .. code-block:: yaml
 
-   config:
+   target:
      proxy:
        host: "proxy.example.com"
        port: 8080
@@ -220,7 +220,7 @@ Route requests through HTTP, HTTPS, or SOCKS5 proxies.
 
 .. code-block:: yaml
 
-   config:
+   target:
      proxy:
        host: "proxy.example.com"
        port: 8080
@@ -281,7 +281,7 @@ Route requests through HTTP, HTTPS, or SOCKS5 proxies.
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: "internal-api.company.com"
      port: 443
      tls:
@@ -306,7 +306,7 @@ Run with:
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: "target-api.example.com"
      port: 443
      tls:
@@ -335,7 +335,7 @@ Here's a complete configuration with all options:
 
 .. code-block:: yaml
 
-   config:
+   target:
      # Basic settings
      host: "api.example.com"
      port: 443
@@ -774,7 +774,7 @@ Here's a complete configuration example with all features:
      vulnerability: "CWE-362"
      description: "Testing coupon redemption for race conditions"
 
-   config:
+   target:
      # Basic settings
      host: "shop.example.com"
      port: 443
@@ -1078,7 +1078,7 @@ Troubleshooting
 
 .. code-block:: yaml
 
-   config:
+   target:
      timeout: 60  # Increase timeout
    
    race:
@@ -1103,7 +1103,7 @@ Troubleshooting
 
 .. code-block:: yaml
 
-   config:
+   target:
      tls:
        verify_cert: false  # Only for testing!
        # Or provide custom CA bundle

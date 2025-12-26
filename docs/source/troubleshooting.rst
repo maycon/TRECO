@@ -281,7 +281,7 @@ Issue: Connection Timeout
 .. code-block:: yaml
 
    # Solution 1: Increase timeout
-   config:
+   target:
      timeout: 60  # Increase from default 30s
    
    # Solution 2: Reduce thread count
@@ -323,13 +323,13 @@ Issue: SSL Certificate Error
 .. code-block:: yaml
 
    # Solution 1: Disable verification (TESTING ONLY!)
-   config:
+   target:
      tls:
        enabled: true
        verify_cert: false  # Only for testing!
    
    # Solution 2: Provide CA bundle
-   config:
+   target:
      tls:
        enabled: true
        verify_cert: true
@@ -415,7 +415,7 @@ Issue: Connection Refused
 .. code-block:: yaml
 
    # Check configuration
-   config:
+   target:
      host: "api.example.com"  # Verify correct hostname
      port: 443                # Verify correct port
 
@@ -439,7 +439,7 @@ Issue: Proxy Authentication Failed
 .. code-block:: yaml
 
    # Verify proxy authentication
-   config:
+   target:
      proxy:
        host: "proxy.example.com"
        port: 8080
@@ -475,7 +475,7 @@ Issue: Proxy Connection Failed
 .. code-block:: yaml
 
    # Verify proxy configuration
-   config:
+   target:
      proxy:
        host: "proxy.example.com"  # Check hostname
        port: 8080                 # Check port
@@ -557,7 +557,7 @@ Issue: Poor Race Window (> 100ms)
 .. code-block:: yaml
 
    # Solution 4: Remove proxy if possible
-   config:
+   target:
      # proxy:  # Comment out proxy
      #   host: "proxy.example.com"
 
@@ -1081,7 +1081,7 @@ Create minimal config that reproduces the issue:
    metadata:
      name: "Minimal Test"
    
-   config:
+   target:
      host: "httpbin.org"
      port: 443
      tls:
