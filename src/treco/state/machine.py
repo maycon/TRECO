@@ -103,6 +103,7 @@ class StateMachine:
                 
                 context_input = self.context.to_dict()
                 context_input["target"] = self.config.target
+                context_input["race"] = state.race if state.race else None
                 
 
                 logger_output = self.engine.render(
@@ -124,6 +125,7 @@ class StateMachine:
                 context_input = self.context.to_dict()
                 context_input["target"] = self.config.target
                 context_input["response"] = asdict(result)
+                context_input["race"] = state.race if state.race else None
 
                 logger_output = self.engine.render(
                     state.logger.on_state_leave,

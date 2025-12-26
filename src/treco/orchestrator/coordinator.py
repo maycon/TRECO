@@ -396,14 +396,15 @@ class RaceCoordinator:
                 # Render template and parse HTTP - this can be slow due to GIL
                 # but it doesn't matter because we haven't connected yet
                 # ════════════════════════════════════════════════════════════
-                context_input = context.to_dict()
-                context_input["target"] = self.http_client.config
-                context_input["thread"] = {"id": thread_id, "count": num_threads}
-                
+               
                 # Add thread-specific input if distributor exists
+                thread_info: Dict[str, Any] = {"id": thread_id, "count": num_threads}
                 if input_distributor:
-                    thread_input = input_distributor.get_for_thread(thread_id)
-                    context_input["input"] = thread_input
+                    thread_info["input"] = input_distributor.get_for_thread(thread_id)
+
+                context_input: Dict[str, Any] = context.to_dict()
+                context_input["target"] = self.http_client.config
+                context_input["thread"] = thread_info
 
                 http_text = self.template_engine.render(state.request, context_input, context)
                 method, path, headers, body = self.http_parser.parse(http_text)
