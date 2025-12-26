@@ -3,9 +3,6 @@ Tests for JSON Schema validation.
 """
 
 import pytest
-import tempfile
-import yaml
-from pathlib import Path
 
 from treco.parser.schema_validator import SchemaValidator, SchemaValidationError
 

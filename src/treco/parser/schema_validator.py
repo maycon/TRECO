@@ -8,7 +8,7 @@ checks structure, types, and basic constraints before runtime validation.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from jsonschema import validate, ValidationError, Draft7Validator
 from jsonschema.exceptions import best_match
@@ -75,7 +75,7 @@ class SchemaValidator:
             error = best_match(self.validator.iter_errors(data))
             raise SchemaValidationError.from_validation_error(error) from e
 
-    def validate_with_warnings(self, data: Dict[str, Any]) -> list[str]:
+    def validate_with_warnings(self, data: Dict[str, Any]) -> List[str]:
         """
         Validate and return list of all validation errors as warnings.
 
@@ -106,7 +106,7 @@ class SchemaValidationError(Exception):
     - The invalid value (if applicable)
     """
 
-    def __init__(self, message: str, path: list[str] = None, value: Any = None):
+    def __init__(self, message: str, path: Optional[List[str]] = None, value: Any = None):
         """
         Initialize schema validation error.
 
