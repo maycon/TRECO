@@ -223,6 +223,26 @@ class YAMLLoader:
 
         return data
 
+    def _build_state_input(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build state-level input configuration.
+        
+        Handles both simple values and complex input configurations with
+        source specifications (file, generator, range).
+        
+        Args:
+            data: Raw input configuration from YAML
+            
+        Returns:
+            Processed input configuration dictionary
+        """
+        if not data:
+            return {}
+        
+        # Keep the raw structure - resolution will happen at runtime
+        # This allows for both simple values and complex InputConfig specs
+        return data
+
     def _build_state(self, name: str, data: Dict[str, Any]) -> State:
         """Build a single State object."""
         # Build transitions
@@ -279,10 +299,14 @@ class YAMLLoader:
                 connection_strategy=race_data.get("connection_strategy", "preconnect"),
                 reuse_connections=race_data.get("reuse_connections", False),
                 thread_propagation=race_data.get("thread_propagation", "single"),
+                input_mode=race_data.get("input_mode", "same"),
             )
 
         # Build extract patterns
         extracts = self._build_extract_pattern(data.get("extract", {}))
+        
+        # Build state-level input configuration (if present)
+        state_input = self._build_state_input(data.get("input", {}))
 
         return State(
             name=name,
@@ -293,4 +317,5 @@ class YAMLLoader:
             next=transitions,
             logger=logger_config,
             race=race_config,
+            input=state_input,
         )

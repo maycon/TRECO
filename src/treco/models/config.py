@@ -170,6 +170,7 @@ class RaceConfig:
         connection_strategy: Connection establishment strategy (preconnect, lazy, pooled)
         reuse_connections: Whether threads reuse connections
         thread_propagation: How to propagate threads after race (single, parallel)
+        input_mode: How to distribute input values across threads (same, distribute, product, random)
     """
 
     threads: int = 20
@@ -177,6 +178,7 @@ class RaceConfig:
     connection_strategy: str = "preconnect"
     reuse_connections: bool = False
     thread_propagation: str = "single"
+    input_mode: str = "same"
 
 
 @dataclass
@@ -244,6 +246,7 @@ class State:
         next: List of possible transitions to other states
         race: Optional race configuration (makes this a race state)
         logger: Logger configuration for state entry/exit
+        input: Optional input configuration for dynamic values (state-level override)
     """
 
     name: str
@@ -254,6 +257,7 @@ class State:
     race: Optional[RaceConfig] = None
     logger: LoggerConfig = field(default_factory=LoggerConfig)
     options: StateOptions = field(default_factory=StateOptions)
+    input: Dict[str, Any] = field(default_factory=dict)
 
     def get_options(self) -> StateOptions:
         """Get options with defaults."""
