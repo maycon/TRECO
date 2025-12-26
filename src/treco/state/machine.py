@@ -139,7 +139,7 @@ class StateMachine:
             next_state = self._get_next_state(state, result)
 
             # Apply transition delay if specified
-            transition = self._find_transition(state, result.status)
+            transition = self._find_transition(state, result)
             if transition and transition.delay_ms > 0:
                 delay_seconds = transition.delay_ms / 1000.0
                 logger.info(f"[StateMachine] Delaying {delay_seconds}s before next transition")
