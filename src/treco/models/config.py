@@ -207,6 +207,17 @@ class ExtractPattern:
 
 
 @dataclass
+class StateOptions:
+    """
+    Additional options for state execution.
+
+    Attributes:
+        proxy_bypass: Whether to bypass proxy for this state
+    """
+
+    proxy_bypass: bool = False
+
+@dataclass
 class State:
     """
     Represents a single state in the attack flow.
@@ -219,6 +230,7 @@ class State:
         name: Unique identifier for this state
         description: Human-readable description
         request: HTTP request template (raw HTTP format)
+        options: Additional execution options for the state
         extract: Dictionary of variable_name -> regex_pattern for data extraction
         next: List of possible transitions to other states
         race: Optional race configuration (makes this a race state)
@@ -232,7 +244,15 @@ class State:
     next: List[Transition] = field(default_factory=list)
     race: Optional[RaceConfig] = None
     logger: LoggerConfig = field(default_factory=LoggerConfig)
+    options: StateOptions = field(default_factory=StateOptions)
 
+    def get_options(self) -> StateOptions:
+        """Get options with defaults."""
+        return self.options or StateOptions()
+    
+    def should_bypass_proxy(self) -> bool:
+        """Check if proxy should be bypassed for this state."""
+        return self.get_options().proxy_bypass
 
 @dataclass
 class Config(BaseConfig):
