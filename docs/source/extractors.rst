@@ -342,6 +342,142 @@ Extract cookie values from Set-Cookie response headers.
            type: cookies
            pattern: "_tracking"
 
+JWT (jwt)
+~~~~~~~~~
+
+Decode and extract data from JSON Web Tokens (JWT). Perfect for extracting user information, checking token expiration, and validating JWT structure in API security testing.
+
+**Type names:** ``jwt``
+
+**Extract Specific Claims:**
+
+.. code-block:: yaml
+
+   extract:
+     user_id:
+       type: jwt
+       source: "{{ access_token }}"
+       claim: sub
+     
+     user_role:
+       type: jwt
+       source: "{{ access_token }}"
+       claim: role
+     
+     email:
+       type: jwt
+       source: "{{ access_token }}"
+       claim: email
+
+**Extract JWT Parts:**
+
+.. code-block:: yaml
+
+   extract:
+     # Get entire payload
+     jwt_payload:
+       type: jwt
+       source: "{{ token }}"
+       part: payload
+     
+     # Get header (algorithm, type, etc.)
+     jwt_header:
+       type: jwt
+       source: "{{ token }}"
+       part: header
+     
+     # Get signature
+     jwt_signature:
+       type: jwt
+       source: "{{ token }}"
+       part: signature
+
+**Validation Checks:**
+
+.. code-block:: yaml
+
+   extract:
+     # Check if token has expired
+     is_expired:
+       type: jwt
+       source: "{{ token }}"
+       check: expired
+     
+     # Get algorithm (HS256, RS256, etc.)
+     algorithm:
+       type: jwt
+       source: "{{ token }}"
+       check: algorithm
+     
+     # Check if structure is valid
+     is_valid:
+       type: jwt
+       source: "{{ token }}"
+       check: valid
+
+**With Signature Verification:**
+
+.. code-block:: yaml
+
+   extract:
+     verified_payload:
+       type: jwt
+       source: "{{ token }}"
+       part: payload
+       verify: true
+       secret: "{{ jwt_secret }}"
+       algorithms: ["HS256", "HS512"]
+
+**Common JWT Claims:**
+
+- ``sub`` - Subject (usually user ID)
+- ``iss`` - Issuer  
+- ``aud`` - Audience
+- ``exp`` - Expiration timestamp
+- ``nbf`` - Not Before timestamp
+- ``iat`` - Issued At timestamp
+- ``jti`` - JWT ID
+- ``role``, ``roles`` - User role(s)
+- ``permissions`` - User permissions
+- ``email``, ``username`` - User identity
+
+**Security Testing Example:**
+
+.. code-block:: yaml
+
+   states:
+     analyze_jwt:
+       request: |
+         GET /api/protected HTTP/1.1
+         Authorization: Bearer {{ token }}
+       
+       extract:
+         algorithm:
+           type: jwt
+           source: "{{ token }}"
+           check: algorithm
+         
+         is_expired:
+           type: jwt
+           source: "{{ token }}"
+           check: expired
+         
+         user_role:
+           type: jwt
+           source: "{{ token }}"
+           claim: role
+       
+       logger:
+         on_state_leave: |
+           {% if algorithm == 'none' %}
+             🚨 CRITICAL: JWT uses 'none' algorithm!
+           {% elif algorithm == 'HS256' %}
+             ⚠ WARNING: JWT uses symmetric algorithm
+           {% endif %}
+           {% if is_expired %}
+             🚨 Token is expired but still accepted!
+           {% endif %}
+
 Extractor Summary
 -----------------
 
@@ -370,6 +506,9 @@ Extractor Summary
    * - ``cookie``
      - ``cookies``, ``set_cookie``, ``set-cookie``
      - Session cookies, tokens
+   * - ``jwt``
+     - 
+     - JWT token analysis, claims extraction
 
 Using Extracted Variables
 -------------------------

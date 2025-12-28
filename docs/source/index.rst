@@ -58,10 +58,13 @@ TRECO enables security researchers to orchestrate highly precise concurrent HTTP
    :hidden:
 
    configuration
+   input-sources
    extractors
    templates
+   when-blocks
    synchronization
    connection-strategies
+   advanced-features
    examples
 
 .. toctree::
@@ -455,6 +458,30 @@ Ready to dive deeper? Here are the next steps:
 * :doc:`api` - Python API documentation for programmatic use
 * :doc:`troubleshooting` - Common issues and solutions
 * :doc:`best-practices` - Performance optimization and security guidelines
+
+----
+
+Support the Project
+-------------------
+
+If you find TRECO useful for your security research, please consider supporting its development:
+
+.. raw:: html
+
+   <div align="center" style="margin: 2em 0;">
+   <a href="https://buymeacoffee.com/maycon" target="_blank">
+     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" 
+          alt="Buy Me A Coffee" 
+          style="height: 60px !important;width: 217px !important;">
+   </a>
+   <br><br>
+   <a href="https://github.com/sponsors/maycon" target="_blank">
+     <img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github&logoColor=white" 
+          alt="GitHub Sponsor">
+   </a>
+   </div>
+
+Your support helps maintain and improve TRECO for the security research community.
 
 ----
 
