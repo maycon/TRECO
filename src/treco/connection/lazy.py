@@ -6,17 +6,14 @@ NOT recommended for race condition attacks.
 """
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 import httpx
 
-from ..sync.base import SyncMechanism
 from .base import ConnectionStrategy
+from ..sync.base import SyncMechanism
 
 logger = logging.getLogger("treco")
-
-if TYPE_CHECKING:
-    from treco.http import HTTPClient
 
 
 class LazyStrategy(ConnectionStrategy):
@@ -58,14 +55,10 @@ class LazyStrategy(ConnectionStrategy):
         Args:
             sync: Sync mechanism (usually not needed for lazy strategy)
         """
-        super().__init__(sync)
-        self._base_url: str = ""
-        self._verify_cert: bool = True
-        self._follow_redirects: bool = False
-        self._timeout: float = 30.0
-        self._http_client = None  # Store reference to HTTP client for mTLS
+        # Use HTTP/2 by default for lazy strategy
+        super().__init__(sync=sync, http2=True)
 
-    def _prepare(self, num_threads: int, http_client: "HTTPClient") -> None:
+    def _prepare(self, num_threads: int, http_client) -> None:
         """
         Store configuration for later use.
 
@@ -75,14 +68,6 @@ class LazyStrategy(ConnectionStrategy):
             num_threads: Number of threads (for logging only)
             http_client: HTTP client with configuration
         """
-        config = http_client.config
-        scheme = "https" if config.tls.enabled else "http"
-        
-        self._base_url = f"{scheme}://{config.host}:{config.port}"
-        self._verify_cert = config.tls.verify_cert
-        self._follow_redirects = config.http.follow_redirects
-        self._http_client = http_client  # Store for mTLS cert access
-        
         logger.info(f"LazyStrategy prepared for {num_threads} threads")
         logger.warning("LazyStrategy: NOT recommended for race attacks!")
         logger.warning("Each thread will establish connection on first request")
@@ -113,19 +98,7 @@ class LazyStrategy(ConnectionStrategy):
         """
         logger.debug(f"[Thread {thread_id}] Creating new httpx.Client (lazy)")
         
-        # Get client certificate for mTLS if configured
-        cert = None
-        if self._http_client:
-            cert = self._http_client._get_client_cert()
-        
-        return httpx.Client(
-            http2=True,
-            verify=self._verify_cert,
-            timeout=httpx.Timeout(self._timeout),
-            base_url=self._base_url,
-            follow_redirects=self._follow_redirects,
-            cert=cert
-        )
+        return httpx.Client(**self._build_client_kwargs())
 
     def cleanup(self) -> None:
         """

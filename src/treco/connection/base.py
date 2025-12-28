@@ -5,7 +5,9 @@ Defines the contract that all connection strategies must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+import httpx
 
 if TYPE_CHECKING:
     from treco.http import HTTPClient
@@ -54,7 +56,13 @@ class ConnectionStrategy(ABC):
                 pass
     """
 
-    def __init__(self, sync: Optional["SyncMechanism"] = None):
+    def __init__(
+        self, 
+        sync: Optional["SyncMechanism"] = None,
+        bypass_proxy: bool = False,
+        http2: bool = False,
+        timeout: float = 30.0,
+    ):
         """
         Initialize the connection strategy.
         
@@ -62,9 +70,22 @@ class ConnectionStrategy(ABC):
             sync: Optional sync mechanism for coordinating connection
                   establishment across threads. If provided, connect()
                   will wait for all threads after establishing connection.
+            bypass_proxy: Whether to bypass proxy for this strategy.
+            http2: Whether to use HTTP/2.
+            timeout: Request timeout in seconds.
         """
         self._sync = sync
         self._num_threads: int = 0
+        self._bypass_proxy = bypass_proxy
+        self._http2 = http2
+        self._timeout = timeout
+        
+        # Configuration set in prepare()
+        self._base_url: str = ""
+        self._verify_cert: bool = True
+        self._follow_redirects: bool = False
+        self._proxy = None
+        self._http_client: Optional["HTTPClient"] = None
 
     @property
     def sync(self) -> Optional["SyncMechanism"]:
@@ -75,6 +96,81 @@ class ConnectionStrategy(ABC):
     def sync(self, value: "SyncMechanism") -> None:
         """Set the sync mechanism for connection coordination."""
         self._sync = value
+
+    def _build_client_kwargs(self, limits: Optional[httpx.Limits] = None) -> Dict[str, Any]:
+        """
+        Build common kwargs for httpx.Client construction.
+        
+        Centralizes the configuration logic shared across all strategies:
+        proxy handling, mTLS certificates, timeouts, etc.
+        
+        Args:
+            limits: Optional connection limits. If None, uses default limits.
+            
+        Returns:
+            Dictionary of kwargs ready for httpx.Client()
+        """
+        # Default limits if not specified
+        if limits is None:
+            limits = httpx.Limits(
+                max_keepalive_connections=1,
+                max_connections=1,
+                keepalive_expiry=30.0,
+            )
+        
+        # Handle proxy bypass
+        proxy_url = None
+        if not self._bypass_proxy and self._proxy:
+            proxy_url = self._proxy.to_client_proxy()
+        
+        # Get mTLS certificate if configured
+        cert = None
+        if self._http_client:
+            cert = self._http_client._get_client_cert()
+        
+        return {
+            "http2": self._http2,
+            "verify": self._verify_cert,
+            "timeout": httpx.Timeout(self._timeout),
+            "base_url": self._base_url,
+            "follow_redirects": self._follow_redirects,
+            "limits": limits,
+            "proxy": proxy_url,
+            "cert": cert,
+        }
+
+    def _store_client_config(self, http_client: "HTTPClient") -> None:
+        """
+        Store common configuration from HTTP client.
+        
+        Args:
+            http_client: HTTP client with configuration
+        """
+        config = http_client.config
+        scheme = "https" if config.tls.enabled else "http"
+        
+        self._base_url = f"{scheme}://{config.host}:{config.port}"
+        self._verify_cert = config.tls.verify_cert
+        self._follow_redirects = config.http.follow_redirects
+        self._proxy = config.proxy
+        self._http_client = http_client
+
+    def _warmup_connection(self, client: httpx.Client) -> None:
+        """
+        Establish TCP/TLS connection with a warmup request.
+        
+        Args:
+            client: httpx.Client to warm up
+        """
+        try:
+            with client.stream("GET", "/", headers={"Connection": "keep-alive"}) as response:
+                pass
+        except httpx.HTTPStatusError:
+            # HTTP error is fine - connection is established
+            pass
+        except httpx.RequestError:
+            # Connection error - but socket might still be ready
+            pass
 
     def prepare(self, num_threads: int, http_client: "HTTPClient") -> None:
         """
@@ -89,6 +185,9 @@ class ConnectionStrategy(ABC):
             http_client: HTTP client with configuration
         """
         self._num_threads = num_threads
+        
+        # Store common configuration
+        self._store_client_config(http_client)
         
         # Prepare sync mechanism if provided
         if self._sync:

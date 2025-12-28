@@ -11,10 +11,8 @@ from typing import Dict, Optional
 
 import httpx
 
-from treco.models.config import ProxyConfig
-
-from ..sync.base import SyncMechanism
 from .base import ConnectionStrategy
+from ..sync.base import SyncMechanism
 
 logger = logging.getLogger("treco")
 
@@ -46,7 +44,12 @@ class PreconnectStrategy(ConnectionStrategy):
         response = client.send(request)
     """
 
-    def __init__(self, sync: Optional[SyncMechanism] = None, http2: bool = False, bypass_proxy: bool = False):
+    def __init__(
+        self, 
+        sync: Optional[SyncMechanism] = None, 
+        http2: bool = False, 
+        bypass_proxy: bool = False,
+    ):
         """
         Initialize the preconnect strategy.
         
@@ -57,21 +60,9 @@ class PreconnectStrategy(ConnectionStrategy):
                    gives more reliable parallel request timing.
             bypass_proxy: Whether to bypass proxy for this strategy
         """
-        super().__init__(sync)
+        super().__init__(sync=sync, bypass_proxy=bypass_proxy, http2=http2)
         self._clients: Dict[int, httpx.Client] = {}
         self._lock = threading.Lock()
-        
-        # Connection configuration (set in _prepare)
-        self._base_url: str = ""
-        self._host: str = ""
-        self._proxy = None
-        self._port: int = 443
-        self._verify_cert: bool = True
-        self._use_http2: bool = http2
-        self._timeout: float = 30.0
-        self._follow_redirects: bool = False
-        self._bypass_proxy: bool = bypass_proxy
-        self._http_client = None  # Store reference to HTTP client for mTLS
 
     def _prepare(self, num_threads: int, http_client) -> None:
         """
@@ -81,22 +72,11 @@ class PreconnectStrategy(ConnectionStrategy):
             num_threads: Number of threads that will connect
             http_client: HTTP client with configuration
         """
-        config = http_client.config
-        scheme = "https" if config.tls.enabled else "http"
-        
-        self._host = config.host
-        self._port = config.port
-        self._proxy: Optional[ProxyConfig] = config.proxy
-        self._base_url = f"{scheme}://{config.host}:{config.port}"
-        self._verify_cert = config.tls.verify_cert
-        self._follow_redirects = config.http.follow_redirects
-        self._http_client = http_client  # Store for mTLS cert access
-        
         # Clear any existing clients from previous runs
         self._cleanup_clients()
         
         logger.info(f"PreconnectStrategy (httpx) ready: {num_threads} threads")
-        logger.debug(f"Target: {self._base_url} (HTTP/2: {self._use_http2}, verify: {self._verify_cert})")
+        logger.debug(f"Target: {self._base_url} (HTTP/2: {self._http2}, verify: {self._verify_cert})")
 
     def _connect(self, thread_id: int) -> None:
         """
@@ -115,48 +95,11 @@ class PreconnectStrategy(ConnectionStrategy):
         logger.debug(f"[Thread {thread_id}] Connecting to {self._base_url}...")
         
         try:
-            # Create httpx client with its own connection pool (no sharing)
-            # Setting pool limits to 1 ensures this client uses exactly 1 connection
-            limits = httpx.Limits(
-                max_keepalive_connections=1,
-                max_connections=1,
-                keepalive_expiry=30.0
-            )
-
-            # Respect bypass_proxy flag
-            proxies = None
-            if not self._bypass_proxy and self._proxy:
-                proxies = self._proxy.to_client_proxy()
+            # Build client with common configuration
+            client = httpx.Client(**self._build_client_kwargs())
             
-            # Get client certificate for mTLS if configured
-            cert = None
-            if self._http_client:
-                cert = self._http_client._get_client_cert()
-            
-            client = httpx.Client(
-                http2=self._use_http2,
-                verify=self._verify_cert,
-                timeout=httpx.Timeout(self._timeout),
-                base_url=self._base_url,
-                follow_redirects=self._follow_redirects,
-                limits=limits,
-                proxy=proxies,
-                cert=cert
-            )
-            
-            # Force TCP/TLS connection establishment
-            # Use GET with stream=True to avoid downloading body
-            # This is more compatible than HEAD (some servers return body on HEAD)
-            try:
-                with client.stream("GET", "/", headers={"Connection": "keep-alive"}) as response:
-                    # Just establish connection, don't read body
-                    pass
-            except httpx.HTTPStatusError:
-                # HTTP error is fine - connection is still established
-                pass
-            except httpx.RequestError as e:
-                # Connection error - but socket might still be ready
-                logger.debug(f"[Thread {thread_id}] Warmup request failed ({e}), connection may still be established")
+            # Warm up connection
+            self._warmup_connection(client)
             
             with self._lock:
                 self._clients[thread_id] = client

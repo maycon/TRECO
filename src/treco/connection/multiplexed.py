@@ -10,10 +10,8 @@ from typing import Optional
 
 import httpx
 
-from treco.models.config import ProxyConfig
-
-from ..sync.base import SyncMechanism
 from .base import ConnectionStrategy
+from ..sync.base import SyncMechanism
 
 logger = logging.getLogger("treco")
 
@@ -48,7 +46,11 @@ class MultiplexedStrategy(ConnectionStrategy):
         response = client.send(request)
     """
 
-    def __init__(self, sync: Optional[SyncMechanism] = None, bypass_proxy: bool = False):
+    def __init__(
+        self, 
+        sync: Optional[SyncMechanism] = None, 
+        bypass_proxy: bool = False,
+    ):
         """
         Initialize the multiplexed strategy.
         
@@ -56,17 +58,9 @@ class MultiplexedStrategy(ConnectionStrategy):
             sync: Sync mechanism (optional, mainly for API consistency)
             bypass_proxy: Whether to bypass proxy for this strategy
         """
-        super().__init__(sync)
+        # Always use HTTP/2 for multiplexed strategy
+        super().__init__(sync=sync, bypass_proxy=bypass_proxy, http2=True)
         self._client: Optional[httpx.Client] = None
-        
-        # Connection configuration (set in _prepare)
-        self._base_url: str = ""
-        self._verify_cert: bool = True
-        self._proxy = None
-        self._timeout: float = 30.0
-        self._follow_redirects: bool = False
-        self._bypass_proxy: bool = bypass_proxy
-        self._http_client = None  # Store reference to HTTP client for mTLS
 
     def _prepare(self, num_threads: int, http_client) -> None:
         """
@@ -76,15 +70,6 @@ class MultiplexedStrategy(ConnectionStrategy):
             num_threads: Number of threads (for logging only)
             http_client: HTTP client with configuration
         """
-        config = http_client.config
-        scheme = "https" if config.tls.enabled else "http"
-        
-        self._base_url = f"{scheme}://{config.host}:{config.port}"
-        self._verify_cert = config.tls.verify_cert
-        self._proxy: Optional[ProxyConfig] = config.proxy
-        self._follow_redirects = config.http.follow_redirects
-        self._http_client = http_client  # Store for mTLS cert access
-        
         # Close existing client if any
         if self._client:
             try:
@@ -92,41 +77,13 @@ class MultiplexedStrategy(ConnectionStrategy):
             except Exception:
                 pass
         
-        # Respect bypass_proxy flag
-        proxies = None
-        if not self._bypass_proxy and self._proxy:
-            proxies = self._proxy.to_client_proxy()
+        # Create single shared HTTP/2 client (no per-connection limits)
+        kwargs = self._build_client_kwargs(limits=None)
+        self._client = httpx.Client(**kwargs)
         
-        # Get client certificate for mTLS if configured
-        cert = http_client._get_client_cert()
+        # Warm up connection
+        self._warmup_connection(self._client)
         
-        # Create single shared HTTP/2 client
-        self._client = httpx.Client(
-            http2=True,  # Always HTTP/2 for this strategy
-            verify=self._verify_cert,
-            timeout=httpx.Timeout(self._timeout),
-            base_url=self._base_url,
-            follow_redirects=self._follow_redirects,
-            proxy=proxies,
-            cert=cert
-        )
-        
-        # Establish connection with a warmup request
-        # Use GET with stream=True to avoid downloading body
-        # This is more compatible than HEAD (some servers return body on HEAD)
-        try:
-            with self._client.stream("GET", "/", headers={"Connection": "keep-alive"}) as response:
-                # Just establish connection, don't read body
-                pass
-            logger.debug("HTTP/2 connection established")
-        except httpx.HTTPStatusError:
-            # HTTP error is fine - connection is established
-            pass
-        except httpx.RequestError as e:
-            logger.debug(f"Warmup request failed ({e}), connection may still be ready")
-        
-        # Check if HTTP/2 was negotiated
-        # Note: httpx doesn't expose this directly, but we can infer from behavior
         logger.info(f"MultiplexedStrategy ready: 1 HTTP/2 connection for {num_threads} threads")
         logger.debug(f"Target: {self._base_url} (verify: {self._verify_cert})")
 
@@ -140,7 +97,6 @@ class MultiplexedStrategy(ConnectionStrategy):
         Args:
             thread_id: Thread ID (unused)
         """
-        # All threads share the same connection, nothing to do here
         logger.debug(f"[Thread {thread_id}] Using shared HTTP/2 connection")
 
     def get_session(self, thread_id: int) -> httpx.Client:
