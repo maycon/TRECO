@@ -120,7 +120,7 @@ class InputDistributor:
         
         logger.debug(
             f"DISTRIBUTE mode: {self.num_threads} threads, "
-            f"{', '.join(f'{k}={len(v)}' for k, v in self.inputs.items())}"
+            f"{', '.join(f'{k}={len(v) if isinstance(v, list) else 1}' for k, v in self.inputs.items())}"
         )
         return assignments
     
