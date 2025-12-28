@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import logging
 
 from treco.http.extractor import extract_all
+from treco.orchestrator.coordinator import RaceCoordinator
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +72,9 @@ class StateExecutor:
             template_engine: Template engine for rendering templates
             extractor: Data extractor for parsing responses
         """
-        self.http_client = http_client
-        self.template_engine = template_engine
-        # self.extractor = extractor
-        self.race_coordinator = None  # Set by orchestrator if needed
+        self.http_client: HTTPClient = http_client
+        self.template_engine: TemplateEngine = template_engine
+        self.race_coordinator: Optional[RaceCoordinator] = None  # Set by orchestrator if needed
 
     def execute(self, state: State, context: ExecutionContext) -> ExecutionResult:
         """
