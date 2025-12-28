@@ -4,10 +4,14 @@ JSONPath extractor module.
 Extracts data from JSON responses using JSONPath expressions.
 """
 
+import json
+import logging
 from typing import Any, Optional, Dict
 from jsonpath_ng import parse
 
 from treco.http.extractor.base import BaseExtractor, ResponseProtocol, register_extractor
+
+logger = logging.getLogger(__name__)
 
 
 @register_extractor('jpath', aliases=['jsonpath', 'json_path'])
@@ -26,6 +30,7 @@ class JPathExtractor(BaseExtractor):
         Args:
             response: HTTP response object
             pattern: JSONPath expression string
+            context: Optional context dict (unused)
 
         Returns:
             Extracted data or None if not found
@@ -34,24 +39,32 @@ class JPathExtractor(BaseExtractor):
             extractor = JPathExtractor()
             response = requests.get("http://api.example.com/auth")
             data = extractor.extract(response, '$.access_token')
-            # data = "Sayings of the Century"
-
-        References:
-            - https://www.rfc-editor.org/rfc/rfc9535.html
-            - https://goessner.net/articles/JsonPath/
-            - https://jsonpath.com/
         """
-        # assuming response is a JSON string or dict
-        data = response.json()
+        # Check if response has content
+        if not response.content:
+            logger.debug(f"Empty response body, cannot extract with jpath: {pattern}")
+            return None
+        
+        # Try to parse JSON
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.debug(f"Response is not valid JSON, cannot extract with jpath: {pattern}. Error: {e}")
+            return None
+        
         if data is None:
             return None
 
-        # TODO: handle non-JSON responses gracefully
-        # TODO: check content-type header for application/json
-
-        expr = parse(pattern)
-        matches = [match.value for match in expr.find(data)]
+        # Parse and execute JSONPath expression
+        try:
+            expr = parse(pattern)
+            matches = [match.value for match in expr.find(data)]
+        except Exception as e:
+            logger.debug(f"JSONPath parse/find error for pattern '{pattern}': {e}")
+            return None
+        
         if not matches:
             return None
-        # return first match, or list if you prefer
+        
+        # Return first match
         return matches[0]
