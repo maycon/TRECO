@@ -151,7 +151,6 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     
     # Setup logging with configured level
     setup_logging(log_level)
-    logger = get_logger()
 
     # Print banner (unless suppressed or validating only)
     if not no_banner and not validate_only:
@@ -163,15 +162,6 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     else:
         results = run_attack(config_file, variables)
         return results
-
-def print_banner():
-    """Print TRECO banner."""
-    click.echo("""
-╔═══════════════════════════════════════════════════════════╗
-║  🦎 TRECO - Tactical Race Exploitation & Concurrency      ║
-║                    Orchestrator                           ║
-╚═══════════════════════════════════════════════════════════╝
-    """)
 
 
 def validate_config(config_path: str) -> int:
@@ -262,7 +252,8 @@ def run_attack(config_path: str, variables: Dict[str, Any]) -> int:
         return 130
 
     except Exception as e:
-        import sys, traceback
+        import sys
+        import traceback
         print(f"\n{error(f'Attack failed: {e}')}", file=sys.stderr)
         logger.debug(traceback.format_exc())
         return 1

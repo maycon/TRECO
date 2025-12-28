@@ -12,14 +12,15 @@ import logging
 
 from treco.models.context import build_template_context
 
-logger = logging.getLogger(__name__)
-
 from treco.logging import user_output
 
 from treco.models import Config, State, ExecutionContext
 from treco.template import TemplateEngine
 from treco.state.executor import StateExecutor, ExecutionResult
 from treco.state.conditions import ConditionEvaluator
+
+logger = logging.getLogger(__name__)
+
 
 
 class StateMachine:

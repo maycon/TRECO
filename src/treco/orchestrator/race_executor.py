@@ -274,7 +274,7 @@ class RaceExecutor:
         for thread in threads:
             thread.join()
 
-        logger.info(f"\n⚡ ALL THREADS RELEASED ⚡\n")
+        logger.info("\n⚡ ALL THREADS RELEASED ⚡\n")
 
         return race_results
 

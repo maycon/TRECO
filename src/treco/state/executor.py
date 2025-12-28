@@ -13,11 +13,11 @@ import logging
 from treco.http.extractor import extract_all
 from treco.orchestrator.coordinator import RaceCoordinator
 
-logger = logging.getLogger(__name__)
-
 from treco.models import State, ExecutionContext
 from treco.template import TemplateEngine
 from treco.http import HTTPClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

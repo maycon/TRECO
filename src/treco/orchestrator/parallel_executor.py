@@ -104,7 +104,7 @@ class ParallelExecutor:
         for thread in parallel_threads:
             thread.join()
 
-        logger.info(f"All parallel threads completed\n")
+        logger.info("All parallel threads completed\n")
 
     def _execute_flow(
         self,

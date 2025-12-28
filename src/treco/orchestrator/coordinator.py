@@ -7,12 +7,10 @@ Orchestrates the entire attack flow including race condition attacks.
 import os
 import traceback
 from typing import Any, Dict, List, Optional, Union
-from dataclasses import is_dataclass
 
 import logging
 
-from treco.logging import user_output
-from treco.models import Config, State, ExecutionContext, build_template_context
+from treco.models import Config, State, ExecutionContext
 from treco.models.config import BaseConfig, RaceConfig
 from treco.parser import YAMLLoader
 from treco.template import TemplateEngine
@@ -105,7 +103,7 @@ class RaceCoordinator:
     def _log_startup(self) -> None:
         """Log startup information."""
         logger.info(f"\n{'='*70}")
-        logger.info(f"Treco - Race Condition PoC Framework")
+        logger.info("Treco - Race Condition PoC Framework")
         logger.info(f"{'='*70}")
         logger.info(f"Attack: {self.config.metadata.name}")
         logger.info(f"Version: {self.config.metadata.version}")

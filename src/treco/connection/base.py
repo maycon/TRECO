@@ -163,7 +163,7 @@ class ConnectionStrategy(ABC):
             client: httpx.Client to warm up
         """
         try:
-            with client.stream("GET", "/", headers={"Connection": "keep-alive"}) as response:
+            with client.stream("GET", "/", headers={"Connection": "keep-alive"}) as _:
                 pass
         except httpx.HTTPStatusError:
             # HTTP error is fine - connection is established

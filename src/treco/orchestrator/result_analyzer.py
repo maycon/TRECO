@@ -68,7 +68,7 @@ class ResultAnalyzer:
         max_timing = max(timings_ms)
         race_window_ms = max_timing - min_timing
 
-        logger.info(f"\nTiming Analysis:")
+        logger.info("\nTiming Analysis:")
         logger.info(f"  Average response time: {avg_timing:.2f}ms")
         logger.info(f"  Fastest response: {min_timing:.2f}ms")
         logger.info(f"  Slowest response: {max_timing:.2f}ms")
@@ -76,24 +76,24 @@ class ResultAnalyzer:
 
         # Evaluate race quality
         if race_window_ms < 1.0:
-            logger.info(f"  ✓ EXCELLENT race window (< 1ms)")
+            logger.info("  ✓ EXCELLENT race window (< 1ms)")
         elif race_window_ms < 100.0:
-            logger.info(f"  ⚠ GOOD race window (< 100ms)")
+            logger.info("  ⚠ GOOD race window (< 100ms)")
         else:
-            logger.info(f"  ✗ POOR race window (> 100ms)")
+            logger.info("  ✗ POOR race window (> 100ms)")
 
     def _analyze_vulnerability(self, successful: List["RaceResult"]) -> None:
         """Analyze potential vulnerability based on results."""
-        logger.info(f"\nVulnerability Assessment:")
+        logger.info("\nVulnerability Assessment:")
 
         if len(successful) > 1:
             logger.info(f"  ⚠ VULNERABLE: Multiple requests succeeded ({len(successful)})")
-            logger.info(f"  ⚠ Potential race condition detected!")
+            logger.info("  ⚠ Potential race condition detected!")
         elif len(successful) == 1:
-            logger.info(f"  ✓ PROTECTED: Only 1 request succeeded")
-            logger.info(f"  ✓ Server appears to have proper synchronization")
+            logger.info("  ✓ PROTECTED: Only 1 request succeeded")
+            logger.info("  ✓ Server appears to have proper synchronization")
         else:
-            logger.info(f"  ? INCONCLUSIVE: No successful requests")
+            logger.info("  ? INCONCLUSIVE: No successful requests")
 
     def propagate_context(
         self,
@@ -175,6 +175,6 @@ class ResultAnalyzer:
 
                 logger.info(f"  → Sum: {total}, Average: {average:.2f}")
             except (ValueError, TypeError):
-                logger.info(f"  → Non-numeric values, skipping sum/avg")
+                logger.info("  → Non-numeric values, skipping sum/avg")
 
-        logger.info(f"\nContext merge complete\n")
+        logger.info("\nContext merge complete\n")

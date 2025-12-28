@@ -6,11 +6,10 @@ Parses raw HTTP text into structured components.
 
 import logging
 
-logger = logging.getLogger(__name__)
-
 import re
 from typing import Tuple, Dict, Optional
 
+logger = logging.getLogger(__name__)
 
 class HTTPParser:
     """

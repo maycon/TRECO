@@ -13,12 +13,6 @@ from typing import Any, Dict, Optional
 if TYPE_CHECKING:
     from treco.models.config import TargetConfig, RaceConfig
 
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-
 logger = logging.getLogger(__name__)
 
 
