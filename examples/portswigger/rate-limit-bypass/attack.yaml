@@ -35,10 +35,10 @@ target:
     verify_cert: false
   http:
     follow_redirects: false
-  proxy:
-    type: http
-    host: 127.0.0.1
-    port: 8080
+  # proxy:
+  #   type: http
+  #   host: 127.0.0.1
+  #   port: 8080
 
 entrypoint:
   state: login_page
@@ -112,7 +112,7 @@ states:
         ╠══════════════════════════════════════════════════════════════════════════════╣
         ║  Target:   {{ "%-65s" | format(target.host)                               }} ║
         ║  Username: {{ "%-65s" | format(username)                                  }} ║
-        ║  Strategy: Race 50 login attempts with different passwords simultaneously    ║
+        ║  Strategy: Race 30 login attempts with different passwords simultaneously    ║
         ║  Mode:     DISTRIBUTE (each thread gets unique password)                     ║
         ╚══════════════════════════════════════════════════════════════════════════════╝
         
@@ -136,7 +136,7 @@ states:
         ║  📊 RACE ATTACK RESULTS                                                      ║
         ╠══════════════════════════════════════════════════════════════════════════════╣
         ║  Threads:    {{ "%-63s" | format(race.threads)                            }} ║
-        ║  Successful: {{ "%-63s" | format(successful_count | length)               }} ║
+        ║  Successful: {{ "%-63s" | format(successful | length)                     }} ║
         ╚══════════════════════════════════════════════════════════════════════════════╝
         
         {% if successful | length > 0 %}
