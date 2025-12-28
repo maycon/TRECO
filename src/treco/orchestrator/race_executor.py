@@ -202,6 +202,9 @@ class RaceExecutor:
             context,
         )
 
+        # Normalize inputs: ensure all values are lists
+        normalized_inputs = self._normalize_inputs(resolved_inputs)
+
         # Get input mode
         try:
             input_mode = InputMode[race_config.input_mode.upper()]
@@ -209,7 +212,7 @@ class RaceExecutor:
             input_mode = InputMode.SAME
 
         distributor = InputDistributor(
-            inputs=resolved_inputs,
+            inputs=normalized_inputs,
             mode=input_mode,
             num_threads=num_threads,
         )
@@ -218,6 +221,30 @@ class RaceExecutor:
         logger.info(f"Input Variables: {list(resolved_inputs.keys())}")
 
         return distributor
+    
+    def _normalize_inputs(self, inputs: Dict[str, Any]) -> Dict[str, List[Any]]:
+        """
+        Normalize input values to lists.
+        
+        InputDistributor expects all values to be lists. This method
+        wraps scalar values in a list.
+        
+        Args:
+            inputs: Dictionary with mixed scalar/list values
+            
+        Returns:
+            Dictionary with all values as lists
+        """
+        normalized: Dict[str, List[Any]] = {}
+        
+        for key, value in inputs.items():
+            if isinstance(value, list):
+                normalized[key] = value
+            else:
+                # Wrap scalar in list
+                normalized[key] = [value]
+        
+        return normalized
 
     def _execute_threads(
         self,
