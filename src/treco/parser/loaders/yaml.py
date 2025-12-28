@@ -27,7 +27,7 @@ from treco.models import (
     LoggerConfig,
 )
 from treco.parser.validator import ConfigValidator
-from treco.parser.schema_validator import SchemaValidator, SchemaValidationError
+from treco.parser.schema_validator import SchemaValidator
 
 
 class YAMLLoader:

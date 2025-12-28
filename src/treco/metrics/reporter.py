@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 
 from treco.metrics.registry import MetricsCounter, MetricsTimer

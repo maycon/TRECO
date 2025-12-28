@@ -1,11 +1,11 @@
 import click
 import os
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, Tuple
 
 from treco import RaceCoordinator
 from treco.logging import get_logger, setup_logging
-from treco.console import Colors, error, print_banner, success, warning
+from treco.console import error, print_banner, success, warning
 
 def parse_set_value(value: str) -> Any:
     """Parse a --set value, handling special prefixes."""
@@ -227,7 +227,7 @@ def validate_config(config_path: str) -> int:
         return 1
         
     except Exception as e:
-        import sys, traceback
+        import traceback
         print(error(f"✗ Validation failed: {e}"))
         logger.debug(traceback.format_exc())
         return 1

@@ -4,9 +4,6 @@ Average Filter
 Computes the average of a list of numeric values.
 """
 
-from typing import Any, List
-
-
 def average_filter(iterable, attribute=None) -> float:
     """
     Compute the average of a list of numeric values.

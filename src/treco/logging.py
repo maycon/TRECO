@@ -7,7 +7,6 @@ Provides configurable log levels with special handling for YAML logger output.
 import logging
 import sys
 from enum import IntEnum
-from typing import Optional
 
 
 class LogLevel(IntEnum):

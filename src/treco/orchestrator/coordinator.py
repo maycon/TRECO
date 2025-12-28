@@ -9,7 +9,7 @@ import threading
 import time
 import traceback
 from typing import List, Dict, Any, Optional, Union
-from dataclasses import dataclass, is_dataclass
+from dataclasses import dataclass
 
 import logging
 
@@ -317,16 +317,15 @@ class RaceCoordinator:
         # ═══════════════════════════════════════════════════════════════
         # INPUT DISTRIBUTION: Prepare input values for each thread
         # ═══════════════════════════════════════════════════════════════
-        from treco.input import InputDistributor, InputMode, InputConfig
+        from treco.input import InputDistributor, InputMode
         
         # Merge entrypoint input with state-level input (state overrides entrypoint)
-
         merged_input = {}
         if self.config.entrypoint.input:
             merged_input.update(self.config.entrypoint.input)
         if state.input:
             merged_input.update(state.input)
-
+        
         # Resolve input configurations to actual values
         context_input = self.context.to_dict()
         context_input.update({

@@ -13,7 +13,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 from treco.logging import user_output
-from treco.template import engine
 
 from treco.models import Config, State, ExecutionContext
 from treco.template import TemplateEngine
