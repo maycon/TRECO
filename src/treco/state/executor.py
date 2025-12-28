@@ -5,17 +5,19 @@ Executes individual states by rendering templates, making requests,
 and extracting data from responses.
 """
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from dataclasses import dataclass
 
 import logging
 
 from treco.http.extractor import extract_all
-from treco.orchestrator.coordinator import RaceCoordinator
 
 from treco.models import State, ExecutionContext
 from treco.template import TemplateEngine
 from treco.http import HTTPClient
+
+if TYPE_CHECKING:
+    from treco.orchestrator.coordinator import RaceCoordinator
 
 logger = logging.getLogger(__name__)
 
