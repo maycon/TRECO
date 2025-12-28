@@ -6,9 +6,11 @@ Manages the execution flow through states with automatic transitions.
 
 from dataclasses import asdict
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import logging
+
+from treco.models.context import build_template_context
 
 logger = logging.getLogger(__name__)
 
@@ -86,12 +88,9 @@ class StateMachine:
             self.current_state = state_name
             self.history.append(state_name)
 
-            context_input = self.context.to_dict()
-            context_input["target"] = self.config.target
-
             state_description: str = self.engine.render(
                 state.description,
-                context_input,
+                self._get_render_context(),
                 self.context,
             )
 
@@ -99,15 +98,9 @@ class StateMachine:
             logger.info(f"[StateMachine] Description: {state_description}")
             
             if state.logger.on_state_enter:
-                
-                context_input = self.context.to_dict()
-                context_input["target"] = self.config.target
-                context_input["race"] = state.race if state.race else None
-                
-
                 logger_output = self.engine.render(
                     state.logger.on_state_enter,
-                    context_input,
+                    self._get_render_context(race=state.race),
                     self.context,
                 )
 
@@ -121,14 +114,9 @@ class StateMachine:
             results.append(result)
 
             if state.logger.on_state_leave:
-                context_input = self.context.to_dict()
-                context_input["target"] = self.config.target
-                context_input["response"] = asdict(result)
-                context_input["race"] = state.race if state.race else None
-
                 logger_output = self.engine.render(
                     state.logger.on_state_leave,
-                    context_input,
+                    self._get_render_context(response=asdict(result), race=state.race),
                     self.context,
                 )
                 user_output(f"<< {state_name}")
@@ -152,6 +140,14 @@ class StateMachine:
         logger.info(f"[StateMachine] Execution path: {' → '.join(self.history)}")
 
         return results
+    
+    def _get_render_context(self, **extra: Any) -> Dict[str, Any]:
+        """Get base context for template rendering."""
+        return build_template_context(
+            context=self.context,
+            target=self.config.target,
+            **extra,
+        )
 
     def _initialize_str_variable(self, template_str: str) -> str:
         """
@@ -162,9 +158,8 @@ class StateMachine:
         Returns:
             Rendered string value
         """
-        context_input = self.context.to_dict()
-        context_input["target"] = self.config.target
-        return self.engine.render(template_str, context_input, self.context)
+        ctx = self._get_render_context()
+        return self.engine.render(template_str, ctx, self.context)
 
     def _initialize_list_variable(self, template_list: list) -> list:
         """
@@ -177,12 +172,10 @@ class StateMachine:
         """
         rendered_list = []
 
-        context_input = self.context.to_dict()
-        context_input["target"] = self.config.target
-        
+        ctx = self._get_render_context()
         for item in template_list:
             if isinstance(item, str):
-                rendered_item = self.engine.render(item, context_input, self.context)
+                rendered_item = self.engine.render(item, ctx, self.context)
                 rendered_list.append(rendered_item)
             else:
                 rendered_list.append(item)
@@ -191,14 +184,12 @@ class StateMachine:
     def _initialize_dict_variable(self, input_dict) -> dict:
         return_dict = {}
 
-        context_input = self.context.to_dict()
-        context_input["target"] = self.config.target
-
+        ctx = self._get_render_context()
         for key, value_template in input_dict.items():
             if not isinstance(value_template, str):
                 rendered_value = self._initialize_variables(value_template)
             else:
-                rendered_value = self.engine.render(value_template, context_input, self.context)
+                rendered_value = self.engine.render(value_template, ctx, self.context)
             return_dict.update({key: rendered_value if rendered_value else value_template})
         return return_dict
 

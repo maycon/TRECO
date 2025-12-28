@@ -7,9 +7,13 @@ such as authentication tokens, account balances, IDs, etc.
 
 import logging
 
-logger = logging.getLogger(__name__)
-
+from typing import TYPE_CHECKING
 from typing import Any, Dict, Optional
+
+if TYPE_CHECKING:
+    from treco.models.config import TargetConfig, RaceConfig
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionContext:
@@ -184,3 +188,60 @@ class ExecutionContext:
     def __repr__(self) -> str:
         """String representation for debugging."""
         return f"ExecutionContext(input={len(self._input)}, argv={len(self._argv)}, env={len(self._env)})"
+    
+def build_template_context(
+    context: "ExecutionContext",
+    target: "TargetConfig",
+    thread: Dict[str, Any] | None = None,
+    response: Dict[str, Any] | None = None,
+    race: "RaceConfig | None" = None,
+    input_data: Dict[str, Any] | None = None,
+    **extra: Any,
+) -> Dict[str, Any]:
+    """
+    Build a template context dictionary for Jinja2 rendering.
+    
+    Centralizes the construction of context dictionaries used throughout
+    the codebase for template rendering, reducing duplication and ensuring
+    consistency.
+    
+    Args:
+        context: ExecutionContext with current variables
+        target: Target server configuration
+        thread: Thread info dict with 'id' and 'count' keys
+        response: Response data (dict or dataclass converted to dict)
+        race: Race configuration for race states
+        input_data: Thread-specific input data from distributor
+        **extra: Additional key-value pairs to include
+        
+    Returns:
+        Dictionary ready for use with TemplateEngine.render()
+        
+    Example:
+        ctx = build_template_context(
+            context=self.context,
+            target=self.http_client.config,
+            thread={"id": 0, "count": 10},
+            response={"status": 200, "body": "..."},
+        )
+        result = engine.render(template, ctx, context)
+    """
+    ctx = context.to_dict()
+    ctx["target"] = target
+    
+    if thread is not None:
+        ctx["thread"] = thread
+    
+    if response is not None:
+        ctx["response"] = response
+    
+    if race is not None:
+        ctx["race"] = race
+    
+    if input_data is not None:
+        ctx["input"] = input_data
+    
+    # Add any extra context
+    ctx.update(extra)
+    
+    return ctx

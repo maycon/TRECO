@@ -16,7 +16,7 @@ from .config import (
     State,
     Config,
 )
-from .context import ExecutionContext
+from .context import ExecutionContext, build_template_context
 
 __all__ = [
     "Metadata",
@@ -29,4 +29,5 @@ __all__ = [
     "State",
     "Config",
     "ExecutionContext",
+    "build_template_context",
 ]

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import logging
 
+from treco.models.context import build_template_context
+
 logger = logging.getLogger(__name__)
 
 from treco.logging import user_output
@@ -269,10 +271,10 @@ class RaceCoordinator:
             merged_input.update(state.input)
         
         # Resolve input configurations to actual values
-        context_input = self.context.to_dict()
-        context_input.update({
-            "target": self.http_client.config
-        })
+        context_input = build_template_context(
+            context=self.context,
+            target=self.http_client.config,
+        )
 
         resolved_inputs: Dict[str, List[Any]] = self.engine.render_dict(
             merged_input,
@@ -312,15 +314,14 @@ class RaceCoordinator:
                 # PHASE 1: LOG THREAD ENTRY (optional)
                 # ════════════════════════════════════════════════════════════
                 if state.logger.on_thread_enter:
+                    thread_input = input_distributor.get_for_thread(thread_id) if input_distributor else None
 
-                    context_input = self.context.to_dict()
-                    context_input["target"] = self.http_client.config
-                    context_input["thread"] = thread_info
-                    
-                    # Add thread-specific input if distributor exists
-                    if input_distributor:
-                        thread_input = input_distributor.get_for_thread(thread_id)
-                        context_input["input"] = thread_input
+                    context_input = build_template_context(
+                        context=self.context,
+                        target=self.http_client.config,
+                        thread=thread_info,
+                        input_data=thread_input,
+                    )
 
                     logger_output = self.engine.render(
                         state.logger.on_thread_enter,
@@ -342,9 +343,11 @@ class RaceCoordinator:
                 if input_distributor:
                     thread_info["input"] = input_distributor.get_for_thread(thread_id)
 
-                context_input: Dict[str, Any] = context.to_dict()
-                context_input["target"] = self.http_client.config
-                context_input["thread"] = thread_info
+                context_input = build_template_context(
+                    context=context,
+                    target=self.http_client.config,
+                    thread=thread_info,
+                )
 
                 http_text = self.engine.render(state.request, context_input, context)
                 method, path, headers, body = self.http_parser.parse(http_text)
@@ -421,18 +424,17 @@ class RaceCoordinator:
 
                 # Log thread leave
                 if state.logger.on_thread_leave:
-                    context_input = self.context.to_dict()
-                    context_input.update({
-                        "target": self.http_client.config,
-                        "thread": thread_info,
-                        "response": response,
-                        "timing_ms": timing_ns / 1_000_000
-                    })
-                    
-                    # Add thread-specific input if distributor exists
-                    if input_distributor:
-                        thread_input = input_distributor.get_for_thread(thread_id)
-                        context_input["input"] = thread_input
+                    thread_input = input_distributor.get_for_thread(thread_id) if input_distributor else None
+
+                    context_input = build_template_context(
+                        context=self.context,
+                        target=self.http_client.config,
+                        thread=thread_info,
+                        response=response,
+                        input_data=thread_input,
+                        timing_ms=timing_ns / 1_000_000,
+                    )
+
 
                     logger_output = self.engine.render(
                         state.logger.on_thread_leave,
