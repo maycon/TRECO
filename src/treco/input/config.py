@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 
 class InputSource(Enum):
     """Types of input sources for race attacks."""
-    INLINE = "inline"      # Direct list of values
-    FILE = "file"          # Load from file
-    GENERATOR = "generator"  # Jinja2 expression
-    RANGE = "range"        # Numeric range
+    INLINE = "inline"           # Direct list of values
+    FILE = "file"               # Load from file
+    GENERATOR = "generator"     # Jinja2 expression
+    RANGE = "range"             # Numeric range
 
 
 class InputMode(Enum):
     """Distribution modes for input values across threads."""
-    SAME = "same"          # All threads get same value (default)
-    DISTRIBUTE = "distribute"  # Round-robin distribution
-    PRODUCT = "product"    # Cartesian product
-    RANDOM = "random"      # Random selection
+    SAME = "same"               # All threads get same value (default)
+    DISTRIBUTE = "distribute"   # Round-robin distribution
+    PRODUCT = "product"         # Cartesian product
+    RANDOM = "random"           # Random selection
 
 
 class InputConfig:
