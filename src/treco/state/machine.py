@@ -163,7 +163,9 @@ class StateMachine:
         Returns:
             Rendered string value
         """
-        return self.engine.render(template_str, {}, self.context)
+        context_input = self.context.to_dict()
+        context_input["target"] = self.config.target
+        return self.engine.render(template_str, context_input, self.context)
 
     def _initialize_list_variable(self, template_list: list) -> list:
         """
@@ -175,9 +177,13 @@ class StateMachine:
             List of rendered string values
         """
         rendered_list = []
+
+        context_input = self.context.to_dict()
+        context_input["target"] = self.config.target
+        
         for item in template_list:
             if isinstance(item, str):
-                rendered_item = self.engine.render(item, {}, self.context)
+                rendered_item = self.engine.render(item, context_input, self.context)
                 rendered_list.append(rendered_item)
             else:
                 rendered_list.append(item)
@@ -185,11 +191,15 @@ class StateMachine:
 
     def _initialize_dict_variable(self, input_dict) -> dict:
         return_dict = {}
+
+        context_input = self.context.to_dict()
+        context_input["target"] = self.config.target
+
         for key, value_template in input_dict.items():
             if not isinstance(value_template, str):
                 rendered_value = self._initialize_variables(value_template)
             else:
-                rendered_value = self.engine.render(value_template, {}, self.context)
+                rendered_value = self.engine.render(value_template, context_input, self.context)
             return_dict.update({key: rendered_value if rendered_value else value_template})
         return return_dict
 
