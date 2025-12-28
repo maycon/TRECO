@@ -215,7 +215,7 @@ class RaceCoordinator:
                 logger.debug(f"Current config value: {getattr(config, key, 'N/A')}")
                 if hasattr(config, key):
                     current_value = getattr(config, key)
-                    if is_dataclass(current_value) and isinstance(value, dict):
+                    if isinstance(current_value, BaseConfig) and isinstance(value, dict):
                         logger.info(f"Merging nested config for: {key}")
                         self._merge_config(current_value, value)
                     elif isinstance(current_value, dict) and isinstance(value, dict):
@@ -320,25 +320,24 @@ class RaceCoordinator:
         from treco.input import InputDistributor, InputMode, InputConfig
         
         # Merge entrypoint input with state-level input (state overrides entrypoint)
+
         merged_input = {}
         if self.config.entrypoint.input:
             merged_input.update(self.config.entrypoint.input)
         if state.input:
             merged_input.update(state.input)
-        
+
         # Resolve input configurations to actual values
-        resolved_inputs: Dict[str, List[Any]] = {}
-        for input_name, input_config in merged_input.items():
-            if isinstance(input_config, list):
-                # Simple list of values
-                resolved_inputs[input_name] = input_config
-            elif isinstance(input_config, dict):
-                # Complex input configuration (file, generator, range)
-                config = InputConfig.from_dict(input_config)
-                resolved_inputs[input_name] = config.resolve(self.template_engine)
-            else:
-                # Single value - wrap in list
-                resolved_inputs[input_name] = [input_config]
+        context_input = self.context.to_dict()
+        context_input.update({
+            "target": self.http_client.config
+        })
+
+        resolved_inputs: Dict[str, List[Any]] = self.engine.render_dict(
+            merged_input,
+            context_input,
+            self.context,
+        )
         
         # Create input distributor if we have inputs
         input_distributor = None
@@ -483,7 +482,7 @@ class RaceCoordinator:
                 if state.logger.on_thread_leave:
                     context_input = self.context.to_dict()
                     context_input.update({
-                        "config": self.http_client.config,
+                        "target": self.http_client.config,
                         "thread": thread_info,
                         "response": response,
                         "timing_ms": timing_ns / 1_000_000
