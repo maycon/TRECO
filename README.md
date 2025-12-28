@@ -74,8 +74,10 @@ Create a file `test.yaml`:
 metadata:
   name: "Race Condition Test"
   version: "1.0"
+  author: "Security Researcher"
+  vulnerability: "CWE-362"
 
-config:
+target:
   host: "api.example.com"
   port: 443
   tls:
@@ -96,7 +98,7 @@ states:
     
     request: |
       POST /api/vouchers/redeem HTTP/1.1
-      Host: {{ config.host }}
+      Host: {{ target.host }}
       Content-Type: application/json
       
       {"code": "{{ voucher_code }}"}

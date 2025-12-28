@@ -30,7 +30,7 @@ Configuration
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: secure-api.internal
      port: 443
      tls:
@@ -44,15 +44,28 @@ Configuration
 
 .. code-block:: yaml
 
-   config:
+   target:
      tls:
        enabled: true
        verify_cert: true
        client_pem: "./certs/client.pem"
 
-**PKCS12 Conversion**:
+**PKCS12 Support**:
 
-PKCS12 format (.pfx/.p12) must be converted to PEM:
+TRECO supports PKCS12 format (.pfx/.p12) directly:
+
+.. code-block:: yaml
+
+   target:
+     tls:
+       enabled: true
+       verify_cert: true
+       client_pfx: "./certs/client.pfx"
+       client_pfx_password: "{{ env('PFX_PASSWORD') }}"
+
+**Optional: Convert to PEM**
+
+If you prefer PEM format, you can convert:
 
 .. code-block:: bash
 
@@ -70,7 +83,7 @@ Certificate paths support Jinja2 templates:
 
 .. code-block:: yaml
 
-   config:
+   target:
      tls:
        client_cert: "{{ env('CERT_PATH') }}/client.crt"
        client_key: "{{ env('CERT_PATH') }}/client.key"
@@ -84,7 +97,7 @@ Example
    metadata:
      name: "mTLS API Test"
    
-   config:
+   target:
      host: secure-api.example.com
      port: 443
      tls:
@@ -104,7 +117,7 @@ Example
        
        request: |
          GET /api/secure/data HTTP/1.1
-         Host: {{ config.host }}
+         Host: {{ target.host }}
 
 Proxy Support
 -------------
@@ -114,41 +127,48 @@ TRECO supports HTTP, HTTPS, and SOCKS5 proxies with authentication.
 Configuration
 ~~~~~~~~~~~~~
 
-**HTTP/HTTPS Proxy**:
+**Structured Proxy Configuration** (Recommended):
 
 .. code-block:: yaml
 
-   config:
+   target:
      proxy:
-       http: "http://proxy.example.com:8080"
-       https: "http://proxy.example.com:8080"
+       host: "proxy.example.com"
+       port: 8080
+       type: "http"  # http, https, or socks5
 
 **With Authentication**:
 
 .. code-block:: yaml
 
-   config:
+   target:
      proxy:
-       http: "http://user:pass@proxy.example.com:8080"
-       https: "http://user:pass@proxy.example.com:8080"
+       host: "proxy.example.com"
+       port: 8080
+       type: "http"
+       auth:
+         username: "{{ env('PROXY_USER') }}"
+         password: "{{ env('PROXY_PASS') }}"
 
 **SOCKS5 Proxy**:
 
 .. code-block:: yaml
 
-   config:
+   target:
      proxy:
-       http: "socks5://localhost:9050"
-       https: "socks5://localhost:9050"
+       host: "localhost"
+       port: 9050
+       type: "socks5"
 
-**Environment Variables**:
+**Alternative: URL Format** (Also supported):
 
 .. code-block:: yaml
 
-   config:
+   target:
      proxy:
-       http: "{{ env('HTTP_PROXY') }}"
-       https: "{{ env('HTTPS_PROXY') }}"
+       host: "proxy.example.com"
+       # Or use URL format (automatically parsed)
+       # http: "http://user:pass@proxy.example.com:8080"
 
 Use Cases
 ~~~~~~~~~
@@ -164,15 +184,49 @@ Example with Burp Suite
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: api.example.com
      port: 443
      tls:
        enabled: true
        verify_cert: false  # Burp uses self-signed cert
      proxy:
-       http: "http://127.0.0.1:8080"
-       https: "http://127.0.0.1:8080"
+       host: "127.0.0.1"
+       port: 8080
+       type: "http"
+
+Proxy Bypass Per-State
+~~~~~~~~~~~~~~~~~~~~~~~
+
+You can bypass proxy configuration for specific states using the ``options`` block:
+
+.. code-block:: yaml
+
+   target:
+     host: api.example.com
+     proxy:
+       host: "proxy.company.com"
+       port: 8080
+   
+   states:
+     normal_request:
+       description: "Goes through proxy"
+       request: |
+         GET /api/data HTTP/1.1
+     
+     direct_connection:
+       description: "Bypasses proxy - direct connection"
+       options:
+         proxy_bypass: true
+       request: |
+         GET /internal-api HTTP/1.1
+
+**Use Cases for Proxy Bypass:**
+
+- Testing internal vs external APIs
+- Comparing performance with/without proxy
+- Accessing services not reachable through proxy
+- Testing proxy-specific vulnerabilities
 
 HTTP/2 Support
 --------------
@@ -184,7 +238,7 @@ Configuration
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: api.example.com
      port: 443
      tls:
@@ -221,7 +275,7 @@ Example
    metadata:
      name: "HTTP/2 Test"
    
-   config:
+   target:
      host: http2.example.com
      port: 443
      tls:
@@ -240,7 +294,7 @@ Example
        
        request: |
          GET /api/data HTTP/2
-         Host: {{ config.host }}
+         Host: {{ target.host }}
 
 Connection Reuse
 ----------------
@@ -254,7 +308,7 @@ Configuration
 
 .. code-block:: yaml
 
-   config:
+   target:
      connection_reuse: true  # Default: true
 
 **Per-State Setting**:
@@ -331,21 +385,21 @@ Configuration
 
 .. code-block:: yaml
 
-   config:
+   target:
      follow_redirects: true  # Default
 
 **Disable Redirects**:
 
 .. code-block:: yaml
 
-   config:
+   target:
      follow_redirects: false
 
 **Max Redirects**:
 
 .. code-block:: yaml
 
-   config:
+   target:
      max_redirects: 5  # Default: 20
 
 Use Cases
@@ -361,7 +415,7 @@ Example
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: api.example.com
      follow_redirects: true
      max_redirects: 3
@@ -509,7 +563,7 @@ Global Timeout
 
 .. code-block:: yaml
 
-   config:
+   target:
      timeout: 30  # 30 seconds for all requests
 
 Per-State Timeout
@@ -541,7 +595,7 @@ Connection Timeout
 
 .. code-block:: yaml
 
-   config:
+   target:
      connect_timeout: 5  # Connection establishment timeout
      timeout: 30  # Read timeout
 
@@ -558,7 +612,7 @@ Example
 
 .. code-block:: yaml
 
-   config:
+   target:
      timeout: 30
      connect_timeout: 5
    

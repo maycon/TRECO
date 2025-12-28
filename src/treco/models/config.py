@@ -289,7 +289,7 @@ class Config(BaseConfig):
 
     Attributes:
         metadata: Attack metadata (name, version, author, vulnerability)
-        config: Server and execution configuration
+        target: Server and execution configuration
         entrypoint: Initial state and input variables
         states: Dictionary mapping state names to State objects
     """

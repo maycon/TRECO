@@ -195,7 +195,7 @@ Test multiple passwords against a login endpoint:
    metadata:
      name: "Password Brute-Force"
    
-   config:
+   target:
      host: "api.example.com"
      port: 443
      tls:

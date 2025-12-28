@@ -16,7 +16,7 @@ Test if a payment can be processed multiple times.
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "payment.example.com"
      port: 443
      tls:
@@ -141,7 +141,7 @@ Test if a single-use coupon can be redeemed multiple times.
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "shop.example.com"
      port: 443
      tls:
@@ -258,7 +258,7 @@ Test if limited inventory items can be over-purchased.
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "store.example.com"
      port: 443
      tls:
@@ -396,7 +396,7 @@ Test if rate limiting can be bypassed through concurrent requests.
      author: "Security Researcher"
      vulnerability: "CWE-307"
 
-   config:
+   target:
      host: "auth.example.com"
      port: 443
      tls:
@@ -473,7 +473,7 @@ Test authentication with TOTP-based 2FA.
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "secure.example.com"
      port: 443
      tls:
@@ -582,7 +582,7 @@ Complete flow with CSRF token extraction.
      author: "Security Researcher"
      vulnerability: "CWE-352"
 
-   config:
+   target:
      host: "webapp.example.com"
      port: 443
      tls:

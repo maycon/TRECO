@@ -749,7 +749,7 @@ Troubleshooting Connection Issues
 
 .. code-block:: yaml
 
-   config:
+   target:
      timeout: 60  # Increase timeout
    
    race:
@@ -789,7 +789,7 @@ Example 1: Optimal Configuration
    metadata:
      name: "Optimal Race Configuration"
    
-   config:
+   target:
      host: "api.example.com"
      port: 443
      tls:

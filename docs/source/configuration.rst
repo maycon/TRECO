@@ -11,7 +11,7 @@ A complete TRECO configuration file consists of four main sections:
 .. code-block:: yaml
 
    metadata:      # Attack metadata
-   config:        # Server and execution settings
+   target:        # Server and execution settings
    entrypoint:    # Starting point
    states:        # State definitions
 
@@ -50,27 +50,61 @@ The ``metadata`` section provides information about the attack scenario.
      - Yes
      - CVE or CWE identifier (e.g., CWE-362)
 
-Config Section
+Target Section
 --------------
 
-The ``config`` section defines server and execution settings.
+The ``target`` section defines server connection and execution settings.
+
+**Basic Configuration:**
 
 .. code-block:: yaml
 
-   config:
+   target:
      host: "api.example.com"
      port: 443
      threads: 20
      reuse_connection: false
+
+**Complete Configuration:**
+
+.. code-block:: yaml
+
+   target:
+     host: "api.example.com"
+     port: 443
+     threads: 20
+     reuse_connection: false
+     
      tls:
        enabled: true
        verify_cert: true
+       # mTLS options (choose one)
+       client_cert: "./certs/client.crt"
+       client_key: "./certs/client.key"
+       client_key_password: "{{ env('KEY_PASSWORD') }}"
+       # OR
+       client_pem: "./certs/combined.pem"
+       # OR
+       client_pfx: "./certs/client.pfx"
+       client_pfx_password: "{{ env('PFX_PASSWORD') }}"
+     
+     http:
+       follow_redirects: true
+       timeout: 30
+     
+     proxy:
+       host: "proxy.example.com"
+       port: 8080
+       type: "http"
+       auth:
+         username: "{{ env('PROXY_USER') }}"
+         password: "{{ env('PROXY_PASS') }}"
 
 **Fields:**
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 15 15 50
+   :widths: 25 15 15 45
 
    * - Field
      - Required
@@ -87,11 +121,23 @@ The ``config`` section defines server and execution settings.
    * - ``threads``
      - No
      - 20
-     - Default number of concurrent threads
+     - Default number of concurrent threads for race attacks
    * - ``reuse_connection``
      - No
      - false
-     - Whether to reuse TCP connections
+     - Whether to reuse TCP connections across requests
+
+TLS Configuration
+~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 15 15 45
+
+   * - Field
+     - Required
+     - Default
+     - Description
    * - ``tls.enabled``
      - No
      - false
@@ -100,6 +146,103 @@ The ``config`` section defines server and execution settings.
      - No
      - false
      - Verify SSL/TLS certificates
+   * - ``tls.client_cert``
+     - No
+     - —
+     - Path to client certificate for mTLS (PEM format)
+   * - ``tls.client_key``
+     - No
+     - —
+     - Path to client private key for mTLS (PEM format)
+   * - ``tls.client_key_password``
+     - No
+     - —
+     - Password for encrypted client key (supports templates)
+   * - ``tls.client_pem``
+     - No
+     - —
+     - Path to combined PEM file (cert + key)
+   * - ``tls.client_pfx``
+     - No
+     - —
+     - Path to PKCS12 file (.pfx or .p12) for mTLS
+   * - ``tls.client_pfx_password``
+     - No
+     - —
+     - Password for PKCS12 file (supports templates)
+
+**Note:** Use only ONE of the following mTLS options:
+
+- ``client_cert`` + ``client_key`` (separate files)
+- ``client_pem`` (combined file)
+- ``client_pfx`` (PKCS12 format)
+
+HTTP Configuration
+~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 15 15 45
+
+   * - Field
+     - Required
+     - Default
+     - Description
+   * - ``http.follow_redirects``
+     - No
+     - true
+     - Follow HTTP redirects (3xx responses)
+   * - ``http.timeout``
+     - No
+     - 30
+     - Request timeout in seconds
+
+Proxy Configuration
+~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 15 15 45
+
+   * - Field
+     - Required
+     - Default
+     - Description
+   * - ``proxy.host``
+     - No
+     - —
+     - Proxy server hostname or IP
+   * - ``proxy.port``
+     - No
+     - —
+     - Proxy server port
+   * - ``proxy.type``
+     - No
+     - http
+     - Proxy type: ``http``, ``https``, or ``socks5``
+   * - ``proxy.auth.username``
+     - No
+     - —
+     - Proxy authentication username
+   * - ``proxy.auth.password``
+     - No
+     - —
+     - Proxy authentication password (supports templates)
+
+**Example with proxy:**
+
+.. code-block:: yaml
+
+   target:
+     host: "api.example.com"
+     port: 443
+     proxy:
+       host: "proxy.company.com"
+       port: 8080
+       type: "http"
+       auth:
+         username: "{{ env('PROXY_USER') }}"
+         password: "{{ env('PROXY_PASS') }}"
 
 Entrypoint Section
 -------------------
@@ -146,7 +289,7 @@ Basic State
        description: "Authenticate and get token"
        request: |
          POST /api/login HTTP/1.1
-         Host: {{ config.host }}
+         Host: {{ target.host }}
          Content-Type: application/json
          
          {"username": "{{ username }}", "password": "{{ password }}"}
@@ -173,22 +316,84 @@ Basic State
      - Description
    * - ``description``
      - No
-     - Human-readable description
+     - Human-readable description of the state
    * - ``request``
      - No*
      - HTTP request template (required for non-terminal states)
    * - ``extract``
      - No
-     - Variable extraction patterns
+     - Variable extraction patterns (see :doc:`extractors`)
    * - ``race``
      - No
-     - Race attack configuration
+     - Race attack configuration (makes this a race state)
    * - ``logger``
      - No
-     - Logging configuration
+     - Logging configuration for this state
+   * - ``options``
+     - No
+     - Additional execution options (see below)
+   * - ``input``
+     - No
+     - State-level input override (see :doc:`input-sources`)
    * - ``next``
      - No
-     - State transitions
+     - State transition rules (see :doc:`when-blocks`)
+
+State Options
+~~~~~~~~~~~~~
+
+The ``options`` block provides additional control over state execution:
+
+.. code-block:: yaml
+
+   states:
+     bypass_proxy_state:
+       description: "Direct connection bypassing proxy"
+       options:
+         proxy_bypass: true
+       request: |
+         GET /internal-api HTTP/1.1
+
+**Available Options:**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 15 60
+
+   * - Option
+     - Default
+     - Description
+   * - ``proxy_bypass``
+     - false
+     - If true, bypass proxy configuration for this state only
+
+State-Level Input
+~~~~~~~~~~~~~~~~~
+
+States can override entrypoint input values:
+
+.. code-block:: yaml
+
+   entrypoint:
+     state: login
+     input:
+       username: "global_user"
+       api_key: "global_key"
+   
+   states:
+     login:
+       input:
+         username: "override_user"  # Overrides entrypoint value
+       request: |
+         POST /login HTTP/1.1
+         
+         {"username": "{{ username }}"}  # Uses "override_user"
+
+This is useful for:
+
+- Testing different values per state
+- State-specific configurations
+- Dynamic value generation per state
 
 Race Configuration
 ~~~~~~~~~~~~~~~~~~
@@ -379,7 +584,7 @@ Here's a complete configuration example:
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "shop.example.com"
      port: 443
      threads: 20
@@ -398,7 +603,7 @@ Here's a complete configuration example:
        description: "Authenticate user"
        request: |
          POST /api/auth/login HTTP/1.1
-         Host: {{ config.host }}
+         Host: {{ target.host }}
          Content-Type: application/json
          
          {"username": "{{ username }}", "password": "{{ password }}"}
@@ -424,7 +629,7 @@ Here's a complete configuration example:
        description: "Race condition attack on coupon redemption"
        request: |
          POST /api/coupons/redeem HTTP/1.1
-         Host: {{ config.host }}
+         Host: {{ target.host }}
          Authorization: Bearer {{ login.auth_token }}
          Content-Type: application/json
          
@@ -457,7 +662,7 @@ Here's a complete configuration example:
        description: "Verify final balance"
        request: |
          GET /api/user/balance HTTP/1.1
-         Host: {{ config.host }}
+         Host: {{ target.host }}
          Authorization: Bearer {{ login.auth_token }}
        
        extract:

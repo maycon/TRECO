@@ -225,7 +225,7 @@ Here's a simple example of a race condition test for a fund redemption vulnerabi
      version: "1.0"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "api.example.com"
      port: 443
      tls:

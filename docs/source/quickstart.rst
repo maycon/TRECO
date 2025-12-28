@@ -21,7 +21,7 @@ Create a file called ``attack.yaml``:
      author: "Security Researcher"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "api.example.com"
      port: 443
      tls:
@@ -217,7 +217,7 @@ Basic Authentication Test
      author: "Tester"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "localhost"
      port: 8080
      tls:
@@ -262,7 +262,7 @@ API with TOTP 2FA
      author: "Tester"
      vulnerability: "CWE-362"
 
-   config:
+   target:
      host: "api.example.com"
      port: 443
      tls:
