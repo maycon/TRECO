@@ -136,13 +136,9 @@ class RaceCoordinator:
         self._apply_config_overrides()
 
         # Initialize context with CLI inputs
-        self.context = ExecutionContext()
-        self.context.update(self.cli_inputs)
-
         self.context = ExecutionContext(argv=cli_inputs or {}, env=dict(os.environ))
 
         # Initialize components
-        self.template_engine = TemplateEngine()
         self.http_client = HTTPClient(self.config.target)
         self.http_parser = HTTPParser()
         self.engine = TemplateEngine()
@@ -150,7 +146,7 @@ class RaceCoordinator:
         # Initialize state executor
         self.executor = StateExecutor(
             self.http_client,
-            self.template_engine
+            self.engine
         )
 
         # Set self as race coordinator in executor
@@ -404,7 +400,7 @@ class RaceCoordinator:
                 context_input["target"] = self.http_client.config
                 context_input["thread"] = thread_info
 
-                http_text = self.template_engine.render(state.request, context_input, context)
+                http_text = self.engine.render(state.request, context_input, context)
                 method, path, headers, body = self.http_parser.parse(http_text)
 
                 # ════════════════════════════════════════════════════════════
@@ -728,7 +724,7 @@ class RaceCoordinator:
                 # Execute state using a dedicated executor with thread context
                 thread_executor = StateExecutor(
                     self.http_client,
-                    self.template_engine,
+                    self.engine,
                 )
 
                 # Execute the state
