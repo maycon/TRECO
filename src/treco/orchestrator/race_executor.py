@@ -303,7 +303,7 @@ class RaceExecutor:
         Returns:
             RaceResult for this thread
         """
-        thread_info = {"id": thread_id, "count": num_threads}
+        thread_info: Dict[str, Any] = {"id": thread_id, "count": num_threads}
         thread_input = None
         
         if input_distributor:
