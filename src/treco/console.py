@@ -4,8 +4,6 @@ Console utilities for TRECO.
 Provides colored output and banner display.
 """
 
-from typing import Optional
-
 # Try to import colorama for colored output
 try:
     from colorama import init as colorama_init, Fore, Style # type: ignore

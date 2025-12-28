@@ -7,9 +7,13 @@ such as authentication tokens, account balances, IDs, etc.
 
 import logging
 
-logger = logging.getLogger(__name__)
-
+from typing import TYPE_CHECKING
 from typing import Any, Dict, Optional
+
+if TYPE_CHECKING:
+    from treco.models.config import TargetConfig, RaceConfig
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionContext:
@@ -184,3 +188,104 @@ class ExecutionContext:
     def __repr__(self) -> str:
         """String representation for debugging."""
         return f"ExecutionContext(input={len(self._input)}, argv={len(self._argv)}, env={len(self._env)})"
+
+
+def _normalize_response(response: Any) -> Optional[Dict[str, Any]]:
+    """
+    Normalize response to a dictionary for template context.
+    
+    Accepts:
+    - httpx.Response: Converts to dict with status_code, text, headers, cookies
+    - Dict: Returns as-is
+    - None: Returns None
+    
+    Args:
+        response: Response object or dictionary
+        
+    Returns:
+        Dictionary representation of response or None
+    """
+    if response is None:
+        return None
+    
+    if isinstance(response, dict):
+        return response
+    
+    # Check for httpx.Response (duck typing to avoid import issues)
+    if hasattr(response, 'status_code') and hasattr(response, 'text'):
+        return {
+            "status_code": response.status_code,
+            "status": response.status_code,  # Alias for convenience
+            "text": response.text,
+            "content": response.content,
+            "headers": dict(response.headers),
+            "cookies": dict(response.cookies) if hasattr(response, 'cookies') else {},
+            "url": str(response.url) if hasattr(response, 'url') else "",
+            "ok": 200 <= response.status_code < 300,
+        }
+    
+    # Unknown type, try to use as-is
+    return response
+
+
+def build_template_context(
+    context: "ExecutionContext",
+    target: "TargetConfig",
+    thread: Optional[Dict[str, Any]] = None,
+    response: Optional[Any] = None,  # Aceita httpx.Response ou Dict
+    race: Optional["RaceConfig"] = None,
+    input_data: Optional[Dict[str, Any]] = None,
+    **extra: Any,
+) -> Dict[str, Any]:
+    """
+    Build a template context dictionary for Jinja2 rendering.
+    
+    Centralizes the construction of context dictionaries used throughout
+    the codebase for template rendering, reducing duplication and ensuring
+    consistency.
+    
+    Args:
+        context: ExecutionContext with current variables
+        target: Target server configuration
+        thread: Thread info dict with 'id' and 'count' keys
+        response: Response data - accepts httpx.Response or Dict
+        race: Race configuration for race states
+        input_data: Thread-specific input data from distributor
+        **extra: Additional key-value pairs to include
+        
+    Returns:
+        Dictionary ready for use with TemplateEngine.render()
+        
+    Example:
+        # With httpx.Response
+        ctx = build_template_context(
+            context=self.context,
+            target=self.http_client.config,
+            response=httpx_response,  # Automatically converted
+        )
+        
+        # With dict
+        ctx = build_template_context(
+            context=self.context,
+            target=self.http_client.config,
+            response={"status_code": 200, "text": "..."},
+        )
+    """
+    ctx = context.to_dict()
+    ctx["target"] = target
+    
+    if thread is not None:
+        ctx["thread"] = thread
+    
+    if response is not None:
+        ctx["response"] = _normalize_response(response)
+    
+    if race is not None:
+        ctx["race"] = race
+    
+    if input_data is not None:
+        ctx["input"] = input_data
+    
+    ctx.update(extra)
+    
+    return ctx

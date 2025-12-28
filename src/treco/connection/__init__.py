@@ -1,27 +1,41 @@
 """
 Connection strategies for race condition attacks.
 
-This module provides different connection management strategies (Strategy Pattern)
-for handling HTTP connections in multi-threaded race attacks.
+This module provides different strategies for establishing and managing
+HTTP connections in multi-threaded race attacks.
 
-Available strategies:
-    - preconnect: Pre-establish individual connections per thread (httpx, HTTP/2)
-    - multiplexed: Single HTTP/2 connection shared by all threads (tightest race window)
-    - lazy: Connect on-demand when sending request
-    - pooled: Use a shared connection pool
+Strategies:
+    - PreconnectStrategy: Pre-establish individual connections per thread
+    - MultiplexedStrategy: Single HTTP/2 connection shared by all threads
+    - LazyStrategy: Connect on-demand (NOT recommended for races)
+    - PooledStrategy: Shared connection pool (NOT recommended for races)
+
+Example:
+    from treco.connection import create_connection_strategy
+    from treco.sync import create_sync_mechanism
+    
+    sync = create_sync_mechanism("barrier")
+    strategy = create_connection_strategy("preconnect", sync=sync)
+    
+    strategy.prepare(20, http_client)
+    
+    # In each thread:
+    strategy.connect(thread_id)
+    client = strategy.get_session(thread_id)
+    response = client.send(request)
 """
 
 from typing import Optional
 
-from ..sync.base import SyncMechanism
 from .base import ConnectionStrategy
 from .preconnect import PreconnectStrategy
 from .multiplexed import MultiplexedStrategy
 from .lazy import LazyStrategy
 from .pooled import PooledStrategy
+from ..sync.base import SyncMechanism
 
 
-# Factory for creating connection strategies
+# Registry of available strategies
 CONNECTION_STRATEGIES = {
     "preconnect": PreconnectStrategy,
     "multiplexed": MultiplexedStrategy,
@@ -50,12 +64,8 @@ def create_connection_strategy(
         ValueError: If strategy_type is not recognized
 
     Example:
-        # With sync mechanism
-        conn_sync = create_sync_mechanism("barrier")
-        strategy = create_connection_strategy("preconnect", sync=conn_sync)
-        
-        # Without sync (for lazy/pooled)
-        strategy = create_connection_strategy("lazy")
+        # Pre-established connections (recommended for races)
+        strategy = create_connection_strategy("preconnect", sync=barrier)
         
         # HTTP/2 multiplexed (single connection)
         strategy = create_connection_strategy("multiplexed")
@@ -66,16 +76,13 @@ def create_connection_strategy(
     if strategy_type not in CONNECTION_STRATEGIES:
         raise ValueError(
             f"Unknown connection strategy: {strategy_type}. "
-            f"Valid options: {list(CONNECTION_STRATEGIES.keys())}"
+            f"Available: {list(CONNECTION_STRATEGIES.keys())}"
         )
 
     strategy_class = CONNECTION_STRATEGIES[strategy_type]
     
-    # Pass bypass_proxy only to strategies that support it
-    if strategy_type in ("preconnect", "multiplexed"):
-        return strategy_class(sync=sync, bypass_proxy=bypass_proxy)
-    else:
-        return strategy_class(sync=sync)
+    # All strategies now accept bypass_proxy in base class
+    return strategy_class(sync=sync, bypass_proxy=bypass_proxy)
 
 
 __all__ = [

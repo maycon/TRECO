@@ -84,7 +84,7 @@ class JWTExtractor(BaseExtractor):
         
         if not token:
             default = pattern.get('default')
-            logger.warning(f"[JWTExtractor] Token source not found or empty")
+            logger.warning("[JWTExtractor] Token source not found or empty")
             return default
         
         try:
@@ -131,7 +131,7 @@ class JWTExtractor(BaseExtractor):
         except jwt.ExpiredSignatureError:
             if check == 'expired':
                 return True
-            logger.error(f"[JWTExtractor] JWT token has expired")
+            logger.error("[JWTExtractor] JWT token has expired")
             return self._get_default_value(pattern)
         except jwt.InvalidTokenError as e:
             if check == 'valid':

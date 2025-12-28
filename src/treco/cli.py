@@ -1,11 +1,11 @@
 import click
 import os
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, Tuple
 
 from treco import RaceCoordinator
 from treco.logging import get_logger, setup_logging
-from treco.console import Colors, error, print_banner, success, warning
+from treco.console import error, print_banner, success, warning
 
 def parse_set_value(value: str) -> Any:
     """Parse a --set value, handling special prefixes."""
@@ -151,7 +151,6 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     
     # Setup logging with configured level
     setup_logging(log_level)
-    logger = get_logger()
 
     # Print banner (unless suppressed or validating only)
     if not no_banner and not validate_only:
@@ -163,15 +162,6 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     else:
         results = run_attack(config_file, variables)
         return results
-
-def print_banner():
-    """Print TRECO banner."""
-    click.echo("""
-╔═══════════════════════════════════════════════════════════╗
-║  🦎 TRECO - Tactical Race Exploitation & Concurrency      ║
-║                    Orchestrator                           ║
-╚═══════════════════════════════════════════════════════════╝
-    """)
 
 
 def validate_config(config_path: str) -> int:
@@ -227,7 +217,7 @@ def validate_config(config_path: str) -> int:
         return 1
         
     except Exception as e:
-        import sys, traceback
+        import traceback
         print(error(f"✗ Validation failed: {e}"))
         logger.debug(traceback.format_exc())
         return 1
@@ -262,7 +252,8 @@ def run_attack(config_path: str, variables: Dict[str, Any]) -> int:
         return 130
 
     except Exception as e:
-        import sys, traceback
+        import sys
+        import traceback
         print(f"\n{error(f'Attack failed: {e}')}", file=sys.stderr)
         logger.debug(traceback.format_exc())
         return 1

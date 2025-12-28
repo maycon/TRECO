@@ -5,18 +5,21 @@ Executes individual states by rendering templates, making requests,
 and extracting data from responses.
 """
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from dataclasses import dataclass
 
 import logging
 
 from treco.http.extractor import extract_all
 
-logger = logging.getLogger(__name__)
-
 from treco.models import State, ExecutionContext
 from treco.template import TemplateEngine
 from treco.http import HTTPClient
+
+if TYPE_CHECKING:
+    from treco.orchestrator.coordinator import RaceCoordinator
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -71,10 +74,9 @@ class StateExecutor:
             template_engine: Template engine for rendering templates
             extractor: Data extractor for parsing responses
         """
-        self.http_client = http_client
-        self.template_engine = template_engine
-        # self.extractor = extractor
-        self.race_coordinator = None  # Set by orchestrator if needed
+        self.http_client: HTTPClient = http_client
+        self.template_engine: TemplateEngine = template_engine
+        self.race_coordinator: Optional[RaceCoordinator] = None  # Set by orchestrator if needed
 
     def execute(self, state: State, context: ExecutionContext) -> ExecutionResult:
         """

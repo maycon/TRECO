@@ -10,10 +10,10 @@ from pathlib import Path
 
 import logging
 
-logger = logging.getLogger(__name__)
-
 from treco.models import TargetConfig
 from treco.http.parser import HTTPParser
+
+logger = logging.getLogger(__name__)
 
 
 class HTTPClient:

@@ -11,11 +11,11 @@ import os
 import jinja2
 import logging
 
+from typing import Dict, Any, Optional
+from treco.models import ExecutionContext
+
 logger = logging.getLogger(__name__)
 
-from typing import Dict, Any, Optional
-
-from treco.models import ExecutionContext
 
 
 class TemplateEngine:

@@ -8,9 +8,10 @@ import threading
 
 import logging
 
+from .base import SyncMechanism
+
 logger = logging.getLogger(__name__)
 
-from .base import SyncMechanism
 
 
 class BarrierSync(SyncMechanism):

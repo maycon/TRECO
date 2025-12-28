@@ -13,8 +13,6 @@ import logging
 from treco.models.config import ExtractPattern, HTTPConfig, ProxyAuth, ProxyConfig, StateOptions
 from treco.template.engine import TemplateEngine
 
-logger = logging.getLogger(__name__)
-
 from treco.models import (
     Config,
     Metadata,
@@ -27,7 +25,9 @@ from treco.models import (
     LoggerConfig,
 )
 from treco.parser.validator import ConfigValidator
-from treco.parser.schema_validator import SchemaValidator, SchemaValidationError
+from treco.parser.schema_validator import SchemaValidator
+
+logger = logging.getLogger(__name__)
 
 
 class YAMLLoader:
