@@ -96,22 +96,39 @@ class HTTPClient:
         
         return None
 
-    def _create_client(self, use_proxy: bool = False) -> httpx.Client:
+    def _create_client(
+        self, 
+        use_proxy: bool = False,
+        http2: Optional[bool] = None,           # NEW
+        single_connection: bool = False,        # NEW
+        include_base_url: bool = False          # NEW
+    ) -> httpx.Client:
         """
-        Create an httpx Client with connection pooling.
-
+        Create an httpx Client with configurable options.
+        
         Args:
             use_proxy: Whether to configure proxy for this client
-
+            http2: HTTP/2 mode (None = use self._http2, True/False = override)
+            single_connection: If True, limit to 1 connection (for threading)
+            include_base_url: If True, set base_url (for threading)
+        
         Returns:
             Configured httpx.Client
         """
-        limits = httpx.Limits(
-            max_keepalive_connections=20,
-            max_connections=100,
-            keepalive_expiry=30.0,
-        )
-
+        # Configure connection limits based on usage
+        if single_connection:
+            limits = httpx.Limits(
+                max_keepalive_connections=1,
+                max_connections=1,
+                keepalive_expiry=30.0,
+            )
+        else:
+            limits = httpx.Limits(
+                max_keepalive_connections=20,
+                max_connections=100,
+                keepalive_expiry=30.0,
+            )
+        
         timeout = httpx.Timeout(30.0)
         verify_cert = self.config.tls.verify_cert if self.config.tls.enabled else True
         
@@ -122,18 +139,26 @@ class HTTPClient:
         
         # Get client certificate for mTLS if configured
         cert = self._get_client_cert() if self.config.tls.enabled else None
-
-        client = httpx.Client(
-            http2=self._http2,
-            verify=verify_cert,
-            timeout=timeout,
-            limits=limits,
-            follow_redirects=self.config.http.follow_redirects,
-            proxy=proxy_url,
-            cert=cert
-        )
-
-        return client
+        
+        # Determine HTTP/2 setting
+        use_http2 = http2 if http2 is not None else self._http2
+        
+        # Build client kwargs
+        client_kwargs = {
+            'http2': use_http2,
+            'verify': verify_cert,
+            'timeout': timeout,
+            'limits': limits,
+            'follow_redirects': self.config.http.follow_redirects,
+            'proxy': proxy_url,
+            'cert': cert
+        }
+        
+        # Add base_url if requested (for threading)
+        if include_base_url:
+            client_kwargs['base_url'] = self.base_url
+        
+        return httpx.Client(**client_kwargs)
 
     def get_client(self, bypass_proxy: bool = False) -> httpx.Client:
         """
@@ -175,40 +200,24 @@ class HTTPClient:
     def create_client(self, http2: bool = False, use_proxy: bool = True) -> httpx.Client:
         """
         Create a new client for multi-threaded usage.
-
+        
         Each thread in a race condition attack should have its own client
         to avoid contention.
-
+        
         Args:
             http2: Whether to use HTTP/2
             use_proxy: Whether to use proxy (default: True)
-
+        
         Returns:
-            New httpx.Client
+            New httpx.Client with single connection and base_url
         """
-        limits = httpx.Limits(
-            max_keepalive_connections=1,
-            max_connections=1,
-            keepalive_expiry=30.0,
-        )
-        
-        proxy_url = None
-        if use_proxy and self.config.proxy:
-            proxy_url = self.config.proxy.to_client_proxy()
-        
-        # Get client certificate for mTLS if configured
-        cert = self._get_client_cert() if self.config.tls.enabled else None
-
-        return httpx.Client(
+        return self._create_client(
+            use_proxy=use_proxy,
             http2=http2,
-            verify=self.config.tls.verify_cert if self.config.tls.enabled else True,
-            timeout=httpx.Timeout(30.0),
-            limits=limits,
-            follow_redirects=self.config.http.follow_redirects,
-            base_url=self.base_url,
-            proxy=proxy_url,
-            cert=cert
+            single_connection=True,      # ← 1 conexão para threading
+            include_base_url=True         # ← base_url para convenience
         )
+    
 
     def close(self) -> None:
         """Close the clients and release resources."""
