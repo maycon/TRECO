@@ -18,7 +18,7 @@ from treco.http import extractor
 from treco.input import InputDistributor, InputMode
 from treco.logging import user_output
 from treco.models import ExecutionContext, State, build_template_context
-from treco.models.config import RaceConfig
+from treco.models.config import RaceConfig, ThreadGroup
 from treco.sync import create_sync_mechanism
 from treco.connection import create_connection_strategy
 
@@ -249,7 +249,7 @@ class RaceExecutor:
         self, 
         state: State, 
         race_config: RaceConfig, 
-        thread_groups: List,
+        thread_groups: List[ThreadGroup],
         num_threads: int
     ) -> None:
         """Log race attack configuration for thread groups mode."""
@@ -530,7 +530,7 @@ class RaceExecutor:
         self,
         state: State,
         context: ExecutionContext,
-        thread_groups: List,
+        thread_groups: List[ThreadGroup],
         num_threads: int,
         conn_strategy,
         race_sync,

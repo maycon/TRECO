@@ -7,6 +7,20 @@ from treco.models.config import RaceConfig, ThreadGroup
 from treco.parser.loaders.yaml import YAMLLoader
 import tempfile
 import os
+from contextlib import contextmanager
+
+
+@contextmanager
+def temp_yaml_file(content: str):
+    """Context manager for creating temporary YAML files."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        f.write(content)
+        temp_path = f.name
+    
+    try:
+        yield temp_path
+    finally:
+        os.unlink(temp_path)
 
 
 class TestThreadGroupModel:
@@ -127,12 +141,7 @@ states:
     description: "End"
 """
         
-        # Write to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write(yaml_content)
-            temp_path = f.name
-        
-        try:
+        with temp_yaml_file(yaml_content) as temp_path:
             loader = YAMLLoader()
             config = loader.load(temp_path)
             
@@ -160,9 +169,6 @@ states:
             assert group2.delay_ms == 100
             assert "POST /test2" in group2.request
             assert group2.variables["key2"] == "value2"
-            
-        finally:
-            os.unlink(temp_path)
     
     def test_parse_legacy_race_yaml(self):
         """Test parsing legacy YAML without thread_groups."""
@@ -197,12 +203,7 @@ states:
     description: "End"
 """
         
-        # Write to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write(yaml_content)
-            temp_path = f.name
-        
-        try:
+        with temp_yaml_file(yaml_content) as temp_path:
             loader = YAMLLoader()
             config = loader.load(temp_path)
             
@@ -215,9 +216,6 @@ states:
             assert state.race.threads == 20
             assert state.race.sync_mechanism == "barrier"
             assert state.race.thread_groups is None  # Should be None for legacy
-            
-        finally:
-            os.unlink(temp_path)
     
     def test_thread_groups_total_threads_calculation(self):
         """Test that we can calculate total threads from groups."""
@@ -257,11 +255,7 @@ states:
     description: "End"
 """
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write(yaml_content)
-            temp_path = f.name
-        
-        try:
+        with temp_yaml_file(yaml_content) as temp_path:
             loader = YAMLLoader()
             config = loader.load(temp_path)
             
@@ -271,9 +265,6 @@ states:
             # Calculate total threads
             total = sum(g.threads for g in groups)
             assert total == 20  # 3 + 7 + 10
-            
-        finally:
-            os.unlink(temp_path)
 
 
 class TestThreadGroupContext:
