@@ -106,6 +106,31 @@ class RaceExecutor:
             raise ValueError("State is not configured for race condition attack")
 
         race_config: RaceConfig = state.race
+        
+        # Check if using thread groups mode
+        if race_config.thread_groups:
+            return self._execute_thread_groups(state, context, race_config)
+        else:
+            # Legacy mode
+            return self._execute_legacy(state, context, race_config)
+    
+    def _execute_legacy(
+        self,
+        state: State,
+        context: ExecutionContext,
+        race_config: RaceConfig,
+    ) -> List[RaceResult]:
+        """
+        Execute race using legacy mode (single request template for all threads).
+        
+        Args:
+            state: Race state to execute
+            context: Execution context
+            race_config: Race configuration
+            
+        Returns:
+            List of RaceResult from all threads
+        """
         num_threads = race_config.threads
 
         self._log_race_start(state, race_config)
@@ -149,6 +174,65 @@ class RaceExecutor:
         conn_strategy.cleanup()
 
         return race_results
+    
+    def _execute_thread_groups(
+        self,
+        state: State,
+        context: ExecutionContext,
+        race_config: RaceConfig,
+    ) -> List[RaceResult]:
+        """
+        Execute race using thread groups mode.
+        
+        Args:
+            state: Race state to execute
+            context: Execution context
+            race_config: Race configuration
+            
+        Returns:
+            List of RaceResult from all threads
+        """
+        thread_groups = race_config.thread_groups
+        
+        # Calculate total threads
+        num_threads = sum(group.threads for group in thread_groups)
+        
+        self._log_race_start_groups(state, race_config, thread_groups, num_threads)
+
+        # Create sync mechanisms
+        conn_sync = create_sync_mechanism("barrier")
+        race_sync = create_sync_mechanism(race_config.sync_mechanism)
+
+        # Check proxy bypass
+        bypass_proxy = state.should_bypass_proxy()
+        if bypass_proxy:
+            logger.info(f"Proxy bypass enabled for state: {state.name}")
+
+        # Create connection strategy
+        conn_strategy = create_connection_strategy(
+            race_config.connection_strategy,
+            sync=conn_sync,
+            bypass_proxy=bypass_proxy,
+        )
+
+        # Prepare strategies
+        conn_strategy.prepare(num_threads, self.http_client)
+        race_sync.prepare(num_threads)
+
+        # Execute race attack with thread groups
+        race_results = self._execute_thread_groups_workers(
+            state=state,
+            context=context,
+            thread_groups=thread_groups,
+            num_threads=num_threads,
+            conn_strategy=conn_strategy,
+            race_sync=race_sync,
+        )
+
+        # Cleanup
+        conn_strategy.cleanup()
+
+        return race_results
 
     def _log_race_start(self, state: State, race_config: RaceConfig) -> None:
         """Log race attack configuration."""
@@ -156,6 +240,26 @@ class RaceExecutor:
         logger.info(f"RACE ATTACK: {state.name}")
         logger.info(f"{'='*70}")
         logger.info(f"Threads: {race_config.threads}")
+        logger.info(f"Sync Mechanism: {race_config.sync_mechanism}")
+        logger.info(f"Connection Strategy: {race_config.connection_strategy}")
+        logger.info(f"Thread Propagation: {race_config.thread_propagation}")
+        logger.info(f"{'='*70}\n")
+    
+    def _log_race_start_groups(
+        self, 
+        state: State, 
+        race_config: RaceConfig, 
+        thread_groups: List,
+        num_threads: int
+    ) -> None:
+        """Log race attack configuration for thread groups mode."""
+        logger.info(f"\n{'='*70}")
+        logger.info(f"RACE ATTACK (THREAD GROUPS): {state.name}")
+        logger.info(f"{'='*70}")
+        logger.info(f"Total Threads: {num_threads}")
+        logger.info(f"Thread Groups: {len(thread_groups)}")
+        for group in thread_groups:
+            logger.info(f"  - {group.name}: {group.threads} threads, {group.delay_ms}ms delay")
         logger.info(f"Sync Mechanism: {race_config.sync_mechanism}")
         logger.info(f"Connection Strategy: {race_config.connection_strategy}")
         logger.info(f"Thread Propagation: {race_config.thread_propagation}")
@@ -416,6 +520,200 @@ class RaceExecutor:
 
             return RaceResult(
                 thread_id=thread_id,
+                status=0,
+                extracted={},
+                timing_ns=0,
+                error=str(e),
+            )
+    
+    def _execute_thread_groups_workers(
+        self,
+        state: State,
+        context: ExecutionContext,
+        thread_groups: List,
+        num_threads: int,
+        conn_strategy,
+        race_sync,
+    ) -> List[RaceResult]:
+        """
+        Execute all race threads using thread groups and collect results.
+
+        Args:
+            state: Race state
+            context: Execution context
+            thread_groups: List of ThreadGroup configurations
+            num_threads: Total number of threads across all groups
+            conn_strategy: Connection strategy
+            race_sync: Race synchronization mechanism
+
+        Returns:
+            List of RaceResult from all threads
+        """
+        race_results: List[RaceResult] = []
+        results_lock = threading.Lock()
+        
+        # Build thread assignments
+        thread_assignments = []
+        global_thread_id = 0
+        
+        for group in thread_groups:
+            for local_thread_id in range(group.threads):
+                thread_assignments.append({
+                    'global_id': global_thread_id,
+                    'local_id': local_thread_id,
+                    'group': group,
+                })
+                global_thread_id += 1
+
+        def worker(assignment: Dict[str, Any]) -> None:
+            result = self._race_worker_group(
+                assignment=assignment,
+                state=state,
+                context=context,
+                num_threads=num_threads,
+                conn_strategy=conn_strategy,
+                race_sync=race_sync,
+            )
+            with results_lock:
+                race_results.append(result)
+
+        # Create and start threads
+        threads: List[threading.Thread] = []
+        logger.info(f"\nStarting {num_threads} threads across {len(thread_groups)} groups...\n")
+
+        # Initialize context list for this state
+        context.setdefault(state.name, [None] * num_threads)
+
+        for assignment in thread_assignments:
+            thread = threading.Thread(target=worker, args=(assignment,))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for completion
+        for thread in threads:
+            thread.join()
+
+        logger.info("\n⚡ ALL THREADS RELEASED ⚡\n")
+
+        return race_results
+    
+    def _race_worker_group(
+        self,
+        assignment: Dict[str, Any],
+        state: State,
+        context: ExecutionContext,
+        num_threads: int,
+        conn_strategy,
+        race_sync,
+    ) -> RaceResult:
+        """
+        Worker function for a single thread in a thread group.
+
+        Args:
+            assignment: Thread assignment with global_id, local_id, and group
+            state: Race state
+            context: Execution context
+            num_threads: Total number of threads
+            conn_strategy: Connection strategy
+            race_sync: Race synchronization mechanism
+
+        Returns:
+            RaceResult for this thread
+        """
+        global_thread_id = assignment['global_id']
+        local_thread_id = assignment['local_id']
+        group = assignment['group']
+        
+        thread_info: Dict[str, Any] = {
+            "id": global_thread_id,
+            "group_id": local_thread_id,
+            "count": num_threads,
+        }
+
+        try:
+            # Phase 1: Prepare request with group context
+            group_context = {
+                'name': group.name,
+                'threads': group.threads,
+                'delay_ms': group.delay_ms,
+                'variables': group.variables,
+            }
+            
+            context_input = build_template_context(
+                context=context,
+                target=self.http_client.config,
+                thread=thread_info,
+                group=group_context,
+            )
+
+            http_text = self.template_engine.render(
+                group.request, context_input, context
+            )
+            method, path, headers, body = self.http_parser.parse(http_text)
+
+            # Phase 2: Connect
+            conn_strategy.connect(global_thread_id)
+            client = conn_strategy.get_session(global_thread_id)
+
+            # Build prepared request
+            request = client.build_request(
+                method=method,
+                url=path,
+                headers=headers,
+                content=body if body else None,
+            )
+
+            # Phase 3: Race sync (barrier)
+            logger.debug(f"[Thread {global_thread_id}] [{group.name}] Ready, waiting at race sync point...")
+            race_sync.wait(global_thread_id)
+            
+            # Phase 4: Apply group delay
+            if group.delay_ms > 0:
+                time.sleep(group.delay_ms / 1000.0)
+
+            # Phase 5: Send request (RACE WINDOW)
+            start_time_ns = time.perf_counter_ns()
+            response = client.send(request)
+            end_time_ns = time.perf_counter_ns()
+
+            timing_ns = end_time_ns - start_time_ns
+
+            # Extract data
+            extracted = extractor.extract_all(response, state.extract)
+
+            # Update context
+            context.set_list_item(
+                state.name,
+                global_thread_id,
+                {
+                    "thread": thread_info,
+                    "group": group_context,
+                    "status": response.status_code,
+                    "timing_ms": timing_ns / 1_000_000,
+                    **extracted,
+                },
+            )
+
+            logger.info(
+                f"[Thread {global_thread_id}] [{group.name}:{local_thread_id}] "
+                f"Status: {response.status_code}, Time: {timing_ns/1_000_000:.2f}ms"
+            )
+
+            return RaceResult(
+                thread_id=global_thread_id,
+                status=response.status_code,
+                extracted=extracted,
+                timing_ns=timing_ns,
+            )
+
+        except Exception as e:
+            logger.error(f"\n{'='*70}")
+            logger.error(f"[Thread {global_thread_id}] [{group.name}] ERROR: {str(e)}")
+            logger.error(f"{'='*70}\n")
+            traceback.print_exc()
+
+            return RaceResult(
+                thread_id=global_thread_id,
                 status=0,
                 extracted={},
                 timing_ns=0,

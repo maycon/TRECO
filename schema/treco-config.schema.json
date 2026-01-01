@@ -245,7 +245,7 @@
                                     "minimum": 2,
                                     "maximum": 1000,
                                     "default": 20,
-                                    "description": "Number of concurrent threads for this race"
+                                    "description": "Number of concurrent threads for this race (legacy mode)"
                                 },
                                 "sync_mechanism": {
                                     "type": "string",
@@ -292,6 +292,44 @@
                                     ],
                                     "default": "same",
                                     "description": "How to distribute input values across threads (same: all get same value, distribute: round-robin, product: cartesian product, random: random selection)"
+                                },
+                                "thread_groups": {
+                                    "type": "array",
+                                    "description": "Thread groups configuration (new mode) - allows defining distinct request patterns with specific thread counts and delays",
+                                    "items": {
+                                        "type": "object",
+                                        "required": ["name", "threads", "request"],
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "description": "Group identifier (used in logging and context)"
+                                            },
+                                            "threads": {
+                                                "type": "integer",
+                                                "minimum": 1,
+                                                "maximum": 1000,
+                                                "description": "Number of threads in this group"
+                                            },
+                                            "delay_ms": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "default": 0,
+                                                "description": "Delay in milliseconds AFTER barrier release"
+                                            },
+                                            "request": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "description": "HTTP request template for this group (supports Jinja2)"
+                                            },
+                                            "variables": {
+                                                "type": "object",
+                                                "description": "Optional group-specific variables",
+                                                "additionalProperties": true
+                                            }
+                                        },
+                                        "additionalProperties": false
+                                    }
                                 }
                             },
                             "additionalProperties": false
