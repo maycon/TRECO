@@ -1,0 +1,105 @@
+# ============================================================================
+# TRECO Configuration: Thread Groups Demo
+# ============================================================================
+#
+# Simple demonstration of thread groups feature for testing.
+#
+# This example shows how to use thread groups to send different requests
+# with different thread counts and delays, all synchronized at a barrier.
+#
+# Usage:
+#   treco thread-groups-demo.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Thread Groups Demo"
+  version: "1.0"
+  author: "TRECO Framework"
+  vulnerability: "CWE-362"
+  description: |
+    Simple demonstration of thread groups feature.
+
+target:
+  host: "httpbin.org"
+  port: 443
+  threads: 10
+  tls:
+    enabled: true
+    verify_cert: false
+
+entrypoint:
+  state: demo_race
+  input:
+    test_value: "demo"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  demo_race:
+    description: "Demo race with thread groups"
+    
+    request: ""
+    
+    race:
+      sync_mechanism: barrier
+      connection_strategy: preconnect
+      thread_propagation: single
+      
+      thread_groups:
+        # Group 1: POST requests
+        - name: posts
+          threads: 3
+          delay_ms: 0
+          
+          request: |
+            POST /post HTTP/1.1
+            Host: {{ target.host }}
+            Content-Type: application/json
+            
+            {
+              "group": "{{ group.name }}",
+              "thread_id": {{ thread.id }},
+              "group_thread_id": {{ thread.group_id }},
+              "message": "Hello from {{ group.name }}"
+            }
+        
+        # Group 2: GET requests with delay
+        - name: gets
+          threads: 5
+          delay_ms: 50
+          
+          request: |
+            GET /get?group={{ group.name }}&thread={{ thread.id }}&local={{ thread.group_id }} HTTP/1.1
+            Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════╗
+        ║  Thread Groups Demo                                          ║
+        ╠══════════════════════════════════════════════════════════════╣
+        ║  Testing thread groups feature with multiple request types   ║
+        ╚══════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        
+        ✅ Demo completed!
+        
+        Results:
+        {% for result in demo_race %}
+          Thread {{ result.thread.id }} ({{ result.group.name }}:{{ result.thread.group_id }}): {{ result.status }}
+        {% endfor %}
+    
+    next:
+      - goto: end
+
+  end:
+    description: "Demo complete"
+    logger:
+      on_state_enter: |
+        
+        🏁 Demo complete
