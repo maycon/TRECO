@@ -41,6 +41,7 @@ TRECO enables security researchers to orchestrate highly precise concurrent HTTP
 
 - **⚡ Sub-Microsecond Precision**: Race windows < 1μs with barrier synchronization
 - **🔓 GIL-Free Option**: Python 3.14t for true parallel execution
+- **🧵 Thread Groups**: Define multiple request patterns with distinct thread counts and delays
 - **🔄 Flexible Synchronization**: Barrier, countdown latch, and semaphore mechanisms
 - **🌐 Full HTTP/HTTPS Support**: HTTP/1.1 and HTTP/2 with TLS/SSL
 - **🎨 Powerful Templates**: Jinja2-based with TOTP, hashing, env vars, and more
@@ -126,6 +127,7 @@ For detailed documentation, please visit [treco.readthedocs.io](https://treco.re
 - **[Installation Guide](https://treco.readthedocs.io/en/latest/installation.html)** - Complete installation instructions for all platforms
 - **[Quick Start Tutorial](https://treco.readthedocs.io/en/latest/quickstart.html)** - Your first race condition test in 5 minutes
 - **[Configuration Reference](https://treco.readthedocs.io/en/latest/configuration.html)** - Complete YAML configuration guide
+- **[Thread Groups](docs/THREAD_GROUPS.md)** - Define multiple request patterns with distinct thread counts ✨ NEW
 - **[Synchronization Mechanisms](https://treco.readthedocs.io/en/latest/synchronization.html)** - Barrier, latch, and semaphore patterns
 - **[Connection Strategies](https://treco.readthedocs.io/en/latest/connection-strategies.html)** - Preconnect, pooled, lazy, and multiplexed
 - **[Data Extractors](https://treco.readthedocs.io/en/latest/extractors.html)** - JSONPath, XPath, Regex, and more
@@ -142,7 +144,9 @@ For detailed documentation, please visit [treco.readthedocs.io](https://treco.re
 
 Check out the [examples/](examples/) directory for real-world attack scenarios:
 
+- **[Thread Groups Demo](examples/thread-groups-demo.yaml)** - Simple demonstration of thread groups feature ✨ NEW
 - **[PortSwigger Labs](examples/portswigger/)** - Solutions for Web Security Academy challenges
+  - **[Partial Construction Race](examples/portswigger/partial-construction-race/)** - Using thread groups ✨ NEW
 - **[Racing Bank](examples/racing-bank/)** - Fund redemption attack demonstration
 - **[Input Sources](examples/input-sources/)** - Brute-force and enumeration examples
 - **[JWT Analysis](examples/jwt-analysis.yaml)** - JWT vulnerability testing
