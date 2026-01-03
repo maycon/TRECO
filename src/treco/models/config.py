@@ -172,17 +172,41 @@ class Transition:
 
 
 @dataclass
+class ThreadGroup:
+    """
+    Configuration for a thread group within a race condition.
+    
+    Thread groups allow defining distinct request patterns with specific
+    thread counts and delays under a single barrier synchronization.
+    
+    Attributes:
+        name: Group identifier (used in logging and context)
+        threads: Number of threads in this group
+        delay_ms: Delay in milliseconds AFTER barrier release (default: 0)
+        request: HTTP request template for this group
+        variables: Optional group-specific variables
+    """
+    
+    name: str
+    threads: int
+    delay_ms: int = 0
+    request: str = ""
+    variables: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class RaceConfig:
     """
     Configuration for race condition attacks within a state.
 
     Attributes:
-        threads: Number of concurrent threads for the race
+        threads: Number of concurrent threads for the race (legacy mode)
         sync_mechanism: Synchronization strategy (barrier, countdown_latch, semaphore)
         connection_strategy: Connection establishment strategy (preconnect, lazy, pooled)
         reuse_connections: Whether threads reuse connections
         thread_propagation: How to propagate threads after race (single, parallel)
         input_mode: How to distribute input values across threads (same, distribute, product, random)
+        thread_groups: Optional list of thread groups (new mode)
     """
 
     threads: int = 20
@@ -191,6 +215,7 @@ class RaceConfig:
     reuse_connections: bool = False
     thread_propagation: str = "single"
     input_mode: str = "same"
+    thread_groups: Optional[List[ThreadGroup]] = None
 
 
 @dataclass

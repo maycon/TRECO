@@ -6,7 +6,7 @@ Loads YAML files and converts them into typed Config objects.
 
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import logging
 
@@ -24,6 +24,7 @@ from treco.models import (
     RaceConfig,
     LoggerConfig,
 )
+from treco.models.config import ThreadGroup
 from treco.parser.validator import ConfigValidator
 from treco.parser.schema_validator import SchemaValidator
 
@@ -313,6 +314,21 @@ class YAMLLoader:
         race_config: Optional[RaceConfig] = None
         if "race" in data:
             race_data = data["race"]
+            
+            # Build thread groups if present
+            thread_groups: Optional[List[ThreadGroup]] = None
+            if "thread_groups" in race_data:
+                thread_groups = []
+                for group_data in race_data["thread_groups"]:
+                    thread_group = ThreadGroup(
+                        name=group_data.get("name", ""),
+                        threads=group_data.get("threads", 1),
+                        delay_ms=group_data.get("delay_ms", 0),
+                        request=group_data.get("request", ""),
+                        variables=group_data.get("variables", {}),
+                    )
+                    thread_groups.append(thread_group)
+            
             race_config = RaceConfig(
                 threads=race_data.get("threads", 20),
                 sync_mechanism=race_data.get("sync_mechanism", "barrier"),
@@ -320,6 +336,7 @@ class YAMLLoader:
                 reuse_connections=race_data.get("reuse_connections", False),
                 thread_propagation=race_data.get("thread_propagation", "single"),
                 input_mode=race_data.get("input_mode", "same"),
+                thread_groups=thread_groups,
             )
 
         # Build extract patterns
