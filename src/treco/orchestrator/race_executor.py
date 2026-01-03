@@ -16,6 +16,7 @@ import logging
 
 from treco.http import extractor
 from treco.input import InputDistributor, InputMode
+from treco.input.config import InputConfig
 from treco.logging import user_output
 from treco.models import ExecutionContext, State, build_template_context
 from treco.models.config import RaceConfig, ThreadGroup
@@ -306,6 +307,9 @@ class RaceExecutor:
             context,
         )
 
+        # Resolve InputConfig sources (file, generator, range)
+        resolved_inputs = self._resolve_input_sources(resolved_inputs)
+
         # Normalize inputs: ensure all values are lists
         normalized_inputs = self._normalize_inputs(resolved_inputs)
 
@@ -325,6 +329,42 @@ class RaceExecutor:
         logger.info(f"Input Variables: {list(resolved_inputs.keys())}")
 
         return distributor
+    
+    def _resolve_input_sources(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Resolve InputConfig sources (file, generator, range) to actual values.
+        
+        Detects dictionaries with 'source' key and resolves them using InputConfig.
+        
+        Args:
+            inputs: Dictionary with potentially unresolved InputConfig dicts
+            
+        Returns:
+            Dictionary with all InputConfig sources resolved to values
+        """
+        resolved: Dict[str, Any] = {}
+        
+        for key, value in inputs.items():
+            if isinstance(value, dict) and 'source' in value:
+                # This is an InputConfig specification - resolve it
+                try:
+                    input_config = InputConfig.from_dict(value)
+                    resolved_values = input_config.resolve(self.template_engine)
+                    resolved[key] = resolved_values
+                    
+                    logger.info(
+                        f"Resolved input '{key}' from {value['source']} source: "
+                        f"{len(resolved_values)} values"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to resolve input source for '{key}': {e}")
+                    # Keep original value if resolution fails
+                    resolved[key] = value
+            else:
+                # Not an InputConfig - keep as is
+                resolved[key] = value
+        
+        return resolved
     
     def _normalize_inputs(self, inputs: Dict[str, Any]) -> Dict[str, List[Any]]:
         """
@@ -699,6 +739,11 @@ class RaceExecutor:
                 f"Status: {response.status_code}, Time: {timing_ns/1_000_000:.2f}ms"
             )
 
+            # Log thread leave (with group context)
+            self._log_thread_leave(
+                state, context, thread_info, None, response, timing_ns, group_context
+            )
+
             return RaceResult(
                 thread_id=global_thread_id,
                 status=response.status_code,
@@ -756,6 +801,7 @@ class RaceExecutor:
         thread_input: Optional[Dict[str, Any]],
         response: httpx.Response,
         timing_ns: int,
+        group_context: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Log thread leave if configured."""
         if not state.logger.on_thread_leave:
@@ -768,6 +814,7 @@ class RaceExecutor:
             input_data=thread_input,
             response=response,
             timing_ms=timing_ns / 1_000_000,
+            group=group_context,
         )
 
         logger_output = self.template_engine.render(

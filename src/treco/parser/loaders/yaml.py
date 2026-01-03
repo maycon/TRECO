@@ -180,7 +180,14 @@ class YAMLLoader:
             if isinstance(value, str):
                 result[key] = self.engine.render(value, {})
             elif isinstance(value, dict):
-                result[key] = self._build_entrypoint_input(value)
+                # Check if it's an InputConfig (has 'source' key)
+                if 'source' in value:
+                    # Resolve InputConfig to list of values
+                    from treco.input.config import InputConfig
+                    input_config = InputConfig.from_dict(value)
+                    result[key] = input_config.resolve(self.engine)
+                else:
+                    result[key] = self._build_entrypoint_input(value)
             else:
                 result[key] = value  # Keep as is for non-str/dict types
 
