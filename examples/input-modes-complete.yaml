@@ -1,0 +1,333 @@
+# ============================================================================
+# TRECO Feature Example: Input Distribution Modes
+# ============================================================================
+#
+# Demonstrates all input distribution modes for race conditions:
+# - same: All threads use the same input
+# - distribute: Each thread gets a different input value
+# - product: Cartesian product of all input combinations
+# - random: Random selection from input values
+#
+# Usage:
+#   treco examples/features/input-modes-complete.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Input Distribution Modes - Complete Guide"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "N/A - Feature Demo"
+  description: |
+    Comprehensive demonstration of all input distribution modes for
+    race condition attacks with practical examples.
+
+target:
+  host: "httpbin.org"
+  port: 443
+  tls:
+    enabled: true
+
+entrypoint:
+  state: mode_same_demo
+
+states:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mode 1: SAME (All threads use same input)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mode_same_demo:
+    description: "Demonstrate SAME mode - all threads use same input"
+    
+    input:
+      endpoint: "/post"
+      username: "admin"
+      action: "delete_account"
+    
+    race:
+      threads: 3
+      input_mode: same  # All threads use same values
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+    
+    request: |
+      POST {{ thread.input.endpoint }} HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {"username": "{{ thread.input.username }}", "action": "{{ thread.input.action }}"}
+    
+    logger:
+      on_state_enter: |
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Mode: SAME - All threads use identical input                                ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Attack same endpoint with same payload multiple times             ║
+        ║  Example: Exploit idempotency bugs, race same resource                       ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        Input values:
+        • endpoint: {{ endpoint }}
+        • username: {{ username }}
+        • action: {{ action }}
+        
+        Expected: All 3 threads send identical requests
+      
+      on_thread_leave: |
+        Thread {{ thread.id }}: {{ thread.input.username }} → {{ thread.input.action }}
+      
+      on_state_leave: |
+        ✅ SAME mode: All threads used identical input
+        
+        Use cases for SAME mode:
+        • Testing idempotency (same request multiple times)
+        • Resource exhaustion (drain coupon pool)
+        • Concurrency bugs (process same payment twice)
+    
+    next:
+      - goto: mode_distribute_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mode 2: DISTRIBUTE (Each thread gets different input)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mode_distribute_demo:
+    description: "Demonstrate DISTRIBUTE mode - round-robin distribution"
+    
+    input:
+      username:
+        - "user1"
+        - "user2"
+        - "user3"
+      password:
+        - "pass1"
+        - "pass2"
+        - "pass3"
+    
+    race:
+      threads: 3
+      input_mode: distribute  # Thread 0→index 0, Thread 1→index 1, etc.
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+    
+    request: |
+      POST /post HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {"username": "{{ thread.input.username }}", "password": "{{ thread.input.password }}"}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Mode: DISTRIBUTE - Round-robin input distribution                           ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Different payload per thread (e.g., credential stuffing)          ║
+        ║  Distribution: Thread N gets input[N % len(input)]                           ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        Input distribution:
+        • Thread 0: username={{ username[0] }}, password={{ password[0] }}
+        • Thread 1: username={{ username[1] }}, password={{ password[1] }}
+        • Thread 2: username={{ username[2] }}, password={{ password[2] }}
+      
+      on_thread_leave: |
+        Thread {{ thread.id }}: {{ thread.input.username }}:{{ thread.input.password }}
+      
+      on_state_leave: |
+        ✅ DISTRIBUTE mode: Each thread got different input
+        
+        Use cases for DISTRIBUTE mode:
+        • Credential stuffing (different user:pass per thread)
+        • Multi-target attacks (different endpoints)
+        • A/B testing race conditions
+        • PortSwigger single-endpoint lab (different emails)
+    
+    next:
+      - goto: mode_product_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mode 3: PRODUCT (Cartesian product of all combinations)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mode_product_demo:
+    description: "Demonstrate PRODUCT mode - all combinations"
+    
+    input:
+      username:
+        - "admin"
+        - "root"
+      password:
+        - "password123"
+        - "admin123"
+    
+    race:
+      threads: 4  # 2 users × 2 passwords = 4 combinations
+      input_mode: product  # All combinations
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+    
+    request: |
+      POST /post HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {"username": "{{ thread.input.username }}", "password": "{{ thread.input.password }}"}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Mode: PRODUCT - Cartesian product of all input combinations                 ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Test all parameter combinations simultaneously                    ║
+        ║  Combinations: {{ username | length }} users × {{ password | length }} passwords = {{ (username | length) * (password | length) }} threads ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        All combinations (4 threads):
+        • Thread 0: admin:password123
+        • Thread 1: admin:admin123
+        • Thread 2: root:password123
+        • Thread 3: root:admin123
+      
+      on_thread_leave: |
+        Thread {{ thread.id }}: {{ thread.input.username }}:{{ thread.input.password }}
+      
+      on_state_leave: |
+        ✅ PRODUCT mode: All 4 combinations tested simultaneously
+        
+        Use cases for PRODUCT mode:
+        • Brute force attacks (all user:pass combinations)
+        • Parameter fuzzing (all param value combinations)
+        • Multi-dimensional race testing
+        • Finding specific combination that triggers race
+    
+    next:
+      - goto: mode_random_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mode 4: RANDOM (Random selection from input values)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mode_random_demo:
+    description: "Demonstrate RANDOM mode - random input selection"
+    
+    input:
+      username:
+        - "alice"
+        - "bob"
+        - "charlie"
+        - "dave"
+        - "eve"
+      action:
+        - "view"
+        - "edit"
+        - "delete"
+        - "share"
+    
+    race:
+      threads: 5
+      input_mode: random  # Random selection per thread
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+    
+    request: |
+      POST /post HTTP/1.1
+      Host: {{ target.host }}
+      Content-Type: application/json
+      
+      {"username": "{{ thread.input.username }}", "action": "{{ thread.input.action }}"}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Mode: RANDOM - Random input selection per thread                            ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Simulate realistic concurrent user behavior                       ║
+        ║  Selection: Each thread randomly picks from input lists                      ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        Input pools:
+        • Usernames: {{ username | join(', ') }}
+        • Actions: {{ action | join(', ') }}
+        
+        Each of 5 threads will randomly select from these pools
+      
+      on_thread_leave: |
+        Thread {{ thread.id }}: {{ thread.input.username }} → {{ thread.input.action }}
+      
+      on_state_leave: |
+        ✅ RANDOM mode: Each thread randomly selected input
+        
+        Use cases for RANDOM mode:
+        • Realistic concurrency simulation
+        • Load testing with varied inputs
+        • Finding edge cases through randomization
+        • Avoiding predictable patterns in tests
+    
+    next:
+      - goto: comparison_summary
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Summary: When to use each mode
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  comparison_summary:
+    description: "Summary of input modes"
+    
+    request: |
+      GET /get HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  📊 Input Modes Comparison                                                   ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║                                                                              ║
+        ║  SAME MODE                                                                   ║
+        ║  • All threads: Identical input                                              ║
+        ║  • Use for: Idempotency bugs, resource exhaustion                            ║
+        ║  • Example: Redeem same coupon 10x simultaneously                            ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  DISTRIBUTE MODE                                                             ║
+        ║  • Each thread: Different input (round-robin)                                ║
+        ║  • Use for: Credential stuffing, multi-target                                ║
+        ║  • Example: Thread 0→email1, Thread 1→email2                                 ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  PRODUCT MODE                                                                ║
+        ║  • All combinations: Cartesian product                                       ║
+        ║  • Use for: Brute force, parameter fuzzing                                   ║
+        ║  • Example: 3 users × 3 passwords = 9 threads                                ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  RANDOM MODE                                                                 ║
+        ║  • Random selection: Simulate real users                                     ║
+        ║  • Use for: Load testing, realistic concurrency                              ║
+        ║  • Example: 5 threads, each picks random user+action                         ║
+        ║                                                                              ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        🎯 Quick Decision Guide:
+        
+        Q: Same payload, multiple times?
+        → Use SAME mode
+        
+        Q: Different payload per thread?
+        → Use DISTRIBUTE mode
+        
+        Q: Test all combinations?
+        → Use PRODUCT mode
+        
+        Q: Simulate real users?
+        → Use RANDOM mode
+        
+        💡 Pro Tip: For modern attacks, consider THREAD GROUPS instead!
+           Thread groups provide cleaner syntax and better organization.
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  ✅ Input Modes Demo Complete!                                               ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
