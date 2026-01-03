@@ -1,0 +1,15 @@
+{
+  "event": "security_override",
+  "timestamp": "2026-01-03T20:31:31.714232",
+  "user": "maycon@hacknroll.com",
+  "branch": "feature/metrics",
+  "files": [
+    "docs/source/troubleshooting.rst",
+    "docs/source/contributing.rst",
+    "docs/source/advanced-features.rst"
+  ],
+  "detectors": [
+    "URI"
+  ],
+  "secrets_found": 3
+}
