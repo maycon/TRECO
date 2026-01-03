@@ -13,6 +13,8 @@ from typing import Any, Dict, Optional
 if TYPE_CHECKING:
     from treco.models.config import TargetConfig, RaceConfig
 
+from treco.models.response import ResponseWrapper, wrap_response
+
 logger = logging.getLogger(__name__)
 
 
@@ -190,51 +192,14 @@ class ExecutionContext:
         return f"ExecutionContext(input={len(self._input)}, argv={len(self._argv)}, env={len(self._env)})"
 
 
-def _normalize_response(response: Any) -> Optional[Dict[str, Any]]:
-    """
-    Normalize response to a dictionary for template context.
-    
-    Accepts:
-    - httpx.Response: Converts to dict with status_code, text, headers, cookies
-    - Dict: Returns as-is
-    - None: Returns None
-    
-    Args:
-        response: Response object or dictionary
-        
-    Returns:
-        Dictionary representation of response or None
-    """
-    if response is None:
-        return None
-    
-    if isinstance(response, dict):
-        return response
-    
-    # Check for httpx.Response (duck typing to avoid import issues)
-    if hasattr(response, 'status_code') and hasattr(response, 'text'):
-        return {
-            "status_code": response.status_code,
-            "status": response.status_code,  # Alias for convenience
-            "text": response.text,
-            "content": response.content,
-            "headers": dict(response.headers),
-            "cookies": dict(response.cookies) if hasattr(response, 'cookies') else {},
-            "url": str(response.url) if hasattr(response, 'url') else "",
-            "ok": 200 <= response.status_code < 300,
-        }
-    
-    # Unknown type, try to use as-is
-    return response
-
-
 def build_template_context(
     context: "ExecutionContext",
     target: "TargetConfig",
     thread: Optional[Dict[str, Any]] = None,
-    response: Optional[Any] = None,  # Aceita httpx.Response ou Dict
+    response: Optional[Any] = None,
     race: Optional["RaceConfig"] = None,
     input_data: Optional[Dict[str, Any]] = None,
+    group: Optional[Dict[str, Any]] = None,
     **extra: Any,
 ) -> Dict[str, Any]:
     """
@@ -244,32 +209,34 @@ def build_template_context(
     the codebase for template rendering, reducing duplication and ensuring
     consistency.
     
+    The response is automatically wrapped in ResponseWrapper for consistent
+    access regardless of whether it's httpx.Response or dict.
+    
     Args:
         context: ExecutionContext with current variables
         target: Target server configuration
         thread: Thread info dict with 'id' and 'count' keys
-        response: Response data - accepts httpx.Response or Dict
+        response: Response data - automatically wrapped in ResponseWrapper
         race: Race configuration for race states
         input_data: Thread-specific input data from distributor
+        group: Thread group info (name, threads, delay_ms, variables)
         **extra: Additional key-value pairs to include
         
     Returns:
         Dictionary ready for use with TemplateEngine.render()
         
     Example:
-        # With httpx.Response
+        # Response is automatically wrapped
         ctx = build_template_context(
             context=self.context,
             target=self.http_client.config,
-            response=httpx_response,  # Automatically converted
+            response=httpx_response,
         )
         
-        # With dict
-        ctx = build_template_context(
-            context=self.context,
-            target=self.http_client.config,
-            response={"status_code": 200, "text": "..."},
-        )
+        # In template, access with unified interface:
+        # {{ response.status }}
+        # {{ response.cookie('session') }}
+        # {{ response.header('Content-Type') }}
     """
     ctx = context.to_dict()
     ctx["target"] = target
@@ -278,13 +245,17 @@ def build_template_context(
         ctx["thread"] = thread
     
     if response is not None:
-        ctx["response"] = _normalize_response(response)
+        # Wrap response in ResponseWrapper for unified access
+        ctx["response"] = wrap_response(response)
     
     if race is not None:
         ctx["race"] = race
     
     if input_data is not None:
         ctx["input"] = input_data
+    
+    if group is not None:
+        ctx["group"] = group
     
     ctx.update(extra)
     
