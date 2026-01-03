@@ -56,7 +56,7 @@ class ResultAnalyzer:
             self._analyze_timing(successful)
 
         # Vulnerability analysis
-        self._analyze_vulnerability(successful)
+        # self._analyze_vulnerability(successful)
 
         logger.info(f"\n{'='*70}\n")
 
