@@ -146,7 +146,6 @@ Check out the [examples/](examples/) directory for real-world attack scenarios:
 
 - **[Thread Groups Demo](examples/thread-groups-demo.yaml)** - Simple demonstration of thread groups feature ✨ NEW
 - **[PortSwigger Labs](examples/portswigger/)** - Solutions for Web Security Academy challenges
-  - **[Partial Construction Race](examples/portswigger/partial-construction-race/)** - Using thread groups ✨ NEW
 - **[Racing Bank](examples/racing-bank/)** - Fund redemption attack demonstration
 - **[Input Sources](examples/input-sources/)** - Brute-force and enumeration examples
 - **[JWT Analysis](examples/jwt-analysis.yaml)** - JWT vulnerability testing
