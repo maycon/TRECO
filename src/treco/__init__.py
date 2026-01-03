@@ -26,7 +26,7 @@ Example:
 """
 
 
-__version__ = "1.10.0"
+__version__ = "1.10.1"
 __author__ = "Hack N' Roll Security Team"
 
 from .orchestrator import RaceCoordinator
