@@ -1,0 +1,380 @@
+# ============================================================================
+# TRECO Feature Example: Advanced When Blocks
+# ============================================================================
+#
+# Demonstrates advanced conditional transitions using "when" blocks with
+# multiple condition types and complex logic.
+#
+# Features demonstrated:
+# - status, status_in, status_range
+# - body_contains, body_not_contains, body_matches
+# - header_exists, header_equals, header_contains
+# - response_time_ms
+# - condition (Jinja2 expressions)
+# - Combining multiple conditions (AND logic)
+# - otherwise fallback
+#
+# Usage:
+#   treco examples/features/when-blocks-advanced.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Advanced When Blocks Demo"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "N/A - Feature Demo"
+  description: |
+    Comprehensive demonstration of when blocks for conditional transitions
+    based on HTTP responses, timing, headers, and custom logic.
+
+target:
+  host: "httpbin.org"
+  port: 443
+  tls:
+    enabled: true
+
+entrypoint:
+  state: test_status_conditions
+
+states:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Example 1: Status Code Conditions
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test_status_conditions:
+    description: "Test various status code matching"
+    
+    request: |
+      GET /status/200 HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  When Blocks - Status Code Conditions                                        ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      # Exact status match
+      - when:
+          - status: 200
+        goto: test_body_conditions
+        logger: |
+          ✅ Matched exact status 200
+      
+      # Status in list
+      - when:
+          - status_in: [200, 201, 204]
+        goto: test_body_conditions
+        logger: |
+          ✅ Matched status in [200, 201, 204]
+      
+      # Status range
+      - when:
+          - status_range: [200, 299]
+        goto: test_body_conditions
+        logger: |
+          ✅ Matched status in range 200-299
+      
+      # Fallback
+      - otherwise: true
+        goto: error_state
+        logger: |
+          ❌ Status did not match any condition
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Example 2: Body Content Conditions
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test_body_conditions:
+    description: "Test body content matching"
+    
+    request: |
+      GET /html HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  When Blocks - Body Content Conditions                                       ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      # body_contains (simple substring)
+      - when:
+          - status: 200
+          - body_contains: "Herman Melville"
+        goto: test_header_conditions
+        logger: |
+          ✅ Body contains "Herman Melville"
+      
+      # body_not_contains (negative match)
+      - when:
+          - status: 200
+          - body_not_contains: "ADMIN_PANEL"
+        goto: test_header_conditions
+        logger: |
+          ✅ Body does NOT contain "ADMIN_PANEL"
+      
+      # body_matches (regex pattern)
+      - when:
+          - status: 200
+          - body_matches: "<!DOCTYPE html>"
+        goto: test_header_conditions
+        logger: |
+          ✅ Body matches HTML pattern
+      
+      # body_equals (exact match)
+      - when:
+          - body_equals: "EXACT_STRING"
+        goto: test_header_conditions
+        logger: |
+          ✅ Body exactly equals expected string
+      
+      - otherwise: true
+        goto: error_state
+        logger: |
+          ❌ Body did not match any condition
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Example 3: Header Conditions
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test_header_conditions:
+    description: "Test header matching"
+    
+    request: |
+      GET /response-headers?Content-Type=application/json&X-Custom=test123 HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  When Blocks - Header Conditions                                             ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      # header_exists (check if header present)
+      - when:
+          - header_exists: "Content-Type"
+        goto: test_timing_conditions
+        logger: |
+          ✅ Header "Content-Type" exists
+      
+      # header_not_exists (check if header absent)
+      - when:
+          - header_not_exists: "X-Admin-Token"
+        goto: test_timing_conditions
+        logger: |
+          ✅ Header "X-Admin-Token" does NOT exist
+      
+      # header_equals (exact value match)
+      - when:
+          - header_equals:
+              name: "Content-Type"
+              value: "application/json"
+        goto: test_timing_conditions
+        logger: |
+          ✅ Header "Content-Type" equals "application/json"
+      
+      # header_contains (substring in value)
+      - when:
+          - header_contains:
+              name: "Content-Type"
+              pattern: "json"
+        goto: test_timing_conditions
+        logger: |
+          ✅ Header "Content-Type" contains "json"
+      
+      # header_matches (regex pattern)
+      - when:
+          - header_matches:
+              name: "X-Custom"
+              pattern: "test\\d+"
+        goto: test_timing_conditions
+        logger: |
+          ✅ Header "X-Custom" matches pattern "test\\d+"
+      
+      - otherwise: true
+        goto: error_state
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Example 4: Timing Conditions
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test_timing_conditions:
+    description: "Test response time conditions"
+    
+    request: |
+      GET /delay/1 HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  When Blocks - Timing Conditions                                             ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      # Response faster than 500ms
+      - when:
+          - response_time_ms:
+              operator: "<"
+              value: 500
+        goto: test_jinja_conditions
+        logger: |
+          ⚡ Fast response (< 500ms)
+      
+      # Response slower than 2000ms
+      - when:
+          - response_time_ms:
+              operator: ">"
+              value: 2000
+        goto: error_state
+        logger: |
+          🐌 Slow response (> 2000ms)
+      
+      # Response in acceptable range
+      - when:
+          - response_time_ms:
+              operator: ">="
+              value: 500
+          - response_time_ms:
+              operator: "<="
+              value: 2000
+        goto: test_jinja_conditions
+        logger: |
+          ✅ Response time in acceptable range (500-2000ms)
+      
+      - otherwise: true
+        goto: error_state
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Example 5: Custom Jinja2 Conditions
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test_jinja_conditions:
+    description: "Test custom Jinja2 condition expressions"
+    
+    request: |
+      GET /uuid HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      uuid:
+        type: jpath
+        pattern: "$.uuid"
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  When Blocks - Custom Jinja2 Conditions                                      ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      # Complex condition using Jinja2
+      - when:
+          - condition: "response.status_code == 200"
+          - condition: "timing_ms < 2000"
+          - condition: "test_jinja_conditions.uuid | length == 36"
+        goto: test_combined_conditions
+        logger: |
+          ✅ All custom conditions met:
+             • Status is 200
+             • Response < 2000ms
+             • UUID has 36 characters
+      
+      - otherwise: true
+        goto: error_state
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Example 6: Combined Conditions (AND logic)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test_combined_conditions:
+    description: "Test combining multiple condition types"
+    
+    request: |
+      GET /json HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  When Blocks - Combined Conditions (AND logic)                               ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+    
+    next:
+      # All conditions must match (AND)
+      - when:
+          - status: 200                                    # Status is 200
+          - header_contains:                               # AND Content-Type contains "json"
+              name: "Content-Type"
+              pattern: "json"
+          - body_contains: "slideshow"                     # AND Body contains "slideshow"
+          - response_time_ms:                              # AND Response < 1000ms
+              operator: "<"
+              value: 1000
+        goto: success_state
+        logger: |
+          ✅ ALL conditions matched (AND logic):
+             • HTTP 200
+             • Content-Type contains "json"
+             • Body contains "slideshow"
+             • Response time < 1000ms
+      
+      # Partial match (some conditions failed)
+      - when:
+          - status: 200
+          - body_contains: "slideshow"
+        goto: success_state
+        logger: |
+          ⚠️  Partial match (relaxed conditions)
+      
+      - otherwise: true
+        goto: error_state
+        logger: |
+          ❌ No conditions matched
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Success and Error States
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  success_state:
+    description: "All tests passed"
+    
+    request: |
+      GET /status/200 HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  ✅ When Blocks Demo Complete!                                               ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  All condition types demonstrated successfully:                              ║
+        ║  • Status conditions (exact, in, range)                                      ║
+        ║  • Body conditions (contains, not_contains, matches, equals)                 ║
+        ║  • Header conditions (exists, equals, contains, matches)                     ║
+        ║  • Timing conditions (>, <, >=, <=)                                          ║
+        ║  • Custom Jinja2 conditions                                                  ║
+        ║  • Combined conditions (AND logic)                                           ║
+        ║  • Otherwise fallback                                                        ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+
+  error_state:
+    description: "Error state for failed conditions"
+    
+    request: |
+      GET /status/500 HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  ❌ Condition Check Failed                                                   ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  One or more when block conditions were not met.                             ║
+        ║  Check the logs above to see which condition failed.                         ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝

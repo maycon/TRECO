@@ -1,0 +1,435 @@
+# ============================================================================
+# TRECO Feature Example: Complete Extractors Guide
+# ============================================================================
+#
+# Demonstrates all available extractors:
+# - regex: Regular expression matching
+# - jpath: JSONPath for JSON responses
+# - xpath: XPath for HTML/XML responses
+# - cookie: Extract cookies from Set-Cookie headers
+# - header: Extract response headers
+# - jinja2: Custom extraction with Jinja2 templates
+#
+# Usage:
+#   treco examples/features/extractors-complete.yaml
+#
+# ============================================================================
+
+metadata:
+  name: "Complete Extractors Guide"
+  version: "1.0"
+  author: "TRECO Team"
+  vulnerability: "N/A - Feature Demo"
+  description: |
+    Comprehensive demonstration of all extractor types available in TRECO
+    for parsing HTTP responses and extracting data.
+
+target:
+  host: "httpbin.org"
+  port: 443
+  tls:
+    enabled: true
+
+entrypoint:
+  state: regex_extractor_demo
+
+states:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Extractor 1: REGEX (Regular Expressions)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  regex_extractor_demo:
+    description: "Demonstrate regex extraction"
+    
+    request: |
+      GET /html HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      # Simple capture group
+      title:
+        type: regex
+        pattern: '<title>(.*?)</title>'
+      
+      # Named capture group
+      author:
+        type: regex
+        pattern: 'Herman Melville'
+      
+      # Extract all matches (first one used)
+      all_paragraphs:
+        type: regex
+        pattern: '<p>(.*?)</p>'
+    
+    logger:
+      on_state_enter: |
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Extractor: REGEX - Regular Expression Matching                              ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Extract patterns from HTML, text, or any response body            ║
+        ║  Features: Capture groups, lookaheads, case-insensitive matching             ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        ✅ Regex Extraction Results:
+        • Title: {{ regex_extractor_demo.title }}
+        • Author: {{ regex_extractor_demo.author }}
+        • First Paragraph: {{ regex_extractor_demo.all_paragraphs[:50] }}...
+        
+        💡 Regex Tips:
+        • Use (.*?) for non-greedy capture
+        • \\d+ for numbers, \\w+ for words
+        • (?i) for case-insensitive
+        • | for alternatives
+    
+    next:
+      - goto: jpath_extractor_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Extractor 2: JPATH (JSONPath)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  jpath_extractor_demo:
+    description: "Demonstrate JSONPath extraction"
+    
+    request: |
+      GET /json HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      # Root level field
+      slideshow_author:
+        type: jpath
+        pattern: "$.slideshow.author"
+      
+      # Array access
+      first_slide_title:
+        type: jpath
+        pattern: "$.slideshow.slides[0].title"
+      
+      # Nested navigation
+      slide_count:
+        type: jpath
+        pattern: "$.slideshow.slides[*]"
+      
+      # Complex path
+      all_slide_titles:
+        type: jpath
+        pattern: "$.slideshow.slides[*].title"
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Extractor: JPATH - JSONPath for JSON Responses                              ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Extract data from JSON APIs                                       ║
+        ║  Features: Nested objects, arrays, filters, wildcards                        ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        ✅ JSONPath Extraction Results:
+        • Author: {{ jpath_extractor_demo.slideshow_author }}
+        • First Slide: {{ jpath_extractor_demo.first_slide_title }}
+        • Slide Count: {{ jpath_extractor_demo.slide_count | length }}
+        
+        💡 JSONPath Syntax:
+        • $ = root
+        • . = child operator
+        • [] = subscript operator
+        • [*] = wildcard (all elements)
+        • [?(@.field)] = filter expressions
+    
+    next:
+      - goto: xpath_extractor_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Extractor 3: XPATH (XPath for HTML/XML)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  xpath_extractor_demo:
+    description: "Demonstrate XPath extraction"
+    
+    request: |
+      GET /forms/post HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      # Extract attribute value
+      form_action:
+        type: xpath
+        pattern: '//form/@action'
+      
+      # Extract element text
+      submit_button_text:
+        type: xpath
+        pattern: '//button[@type="submit"]/text()'
+      
+      # Extract input names
+      first_input_name:
+        type: xpath
+        pattern: '//input[1]/@name'
+      
+      # Complex XPath with predicates
+      text_input_name:
+        type: xpath
+        pattern: '//input[@type="text"]/@name'
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Extractor: XPATH - XPath for HTML/XML Parsing                               ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Extract data from HTML forms, pages, XML responses                ║
+        ║  Features: Element selection, attributes, predicates, text nodes             ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        ✅ XPath Extraction Results:
+        • Form Action: {{ xpath_extractor_demo.form_action }}
+        • Button Text: {{ xpath_extractor_demo.submit_button_text }}
+        • First Input: {{ xpath_extractor_demo.first_input_name }}
+        • Text Input: {{ xpath_extractor_demo.text_input_name }}
+        
+        💡 XPath Syntax:
+        • // = descendant selector
+        • / = child selector
+        • @ = attribute selector
+        • [@attr='value'] = predicate filter
+        • text() = text node
+        • [1] = first element (1-indexed!)
+    
+    next:
+      - goto: cookie_extractor_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Extractor 4: COOKIE (Extract Cookies)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  cookie_extractor_demo:
+    description: "Demonstrate cookie extraction"
+    
+    request: |
+      GET /cookies/set?session=abc123&user=john HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      # Extract specific cookie
+      session_cookie:
+        type: cookie
+        pattern: session
+      
+      # Extract another cookie
+      user_cookie:
+        type: cookie
+        pattern: user
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Extractor: COOKIE - Extract HTTP Cookies                                    ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Capture session tokens, CSRF tokens, auth cookies                 ║
+        ║  Features: Automatic Set-Cookie parsing                                      ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        ✅ Cookie Extraction Results:
+        • Session: {{ cookie_extractor_demo.session_cookie }}
+        • User: {{ cookie_extractor_demo.user_cookie }}
+        
+        💡 Cookie Extractor:
+        • Automatically parses Set-Cookie headers
+        • Extracts cookie value only (not attributes)
+        • Use in subsequent requests: Cookie: name={{ state.cookie }}
+    
+    next:
+      - goto: header_extractor_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Extractor 5: HEADER (Extract Response Headers)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  header_extractor_demo:
+    description: "Demonstrate header extraction"
+    
+    request: |
+      GET /response-headers?X-Custom-Token=secret123&X-Rate-Limit=100 HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      # Extract custom header
+      custom_token:
+        type: header
+        pattern: X-Custom-Token
+      
+      # Extract rate limit
+      rate_limit:
+        type: header
+        pattern: X-Rate-Limit
+      
+      # Extract standard header
+      content_type:
+        type: header
+        pattern: Content-Type
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Extractor: HEADER - Extract HTTP Response Headers                           ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Capture tokens, rate limits, API metadata                         ║
+        ║  Features: Case-insensitive header matching                                  ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        ✅ Header Extraction Results:
+        • Custom Token: {{ header_extractor_demo.custom_token }}
+        • Rate Limit: {{ header_extractor_demo.rate_limit }}
+        • Content-Type: {{ header_extractor_demo.content_type }}
+        
+        💡 Header Extractor:
+        • Case-insensitive matching
+        • Extracts header value as-is
+        • Common headers: Location, ETag, X-CSRF-Token
+    
+    next:
+      - goto: jinja2_extractor_demo
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Extractor 6: JINJA2 (Custom Template Extraction)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  jinja2_extractor_demo:
+    description: "Demonstrate Jinja2 template extraction"
+    
+    request: |
+      GET /json HTTP/1.1
+      Host: {{ target.host }}
+    
+    extract:
+      # Custom computation using Jinja2
+      computed_value:
+        type: jinja2
+        pattern: "{{ response.text | length }}"
+      
+      # Extract and transform
+      uppercase_author:
+        type: jinja2
+        pattern: "{{ (response.json().slideshow.author | default('Unknown')) | upper }}"
+      
+      # Conditional extraction
+      has_slides:
+        type: jinja2
+        pattern: "{{ 'YES' if 'slides' in response.json().slideshow else 'NO' }}"
+      
+      # Complex transformation
+      slide_summary:
+        type: jinja2
+        pattern: "Author: {{ response.json().slideshow.author }}, Slides: {{ response.json().slideshow.slides | length }}"
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  Extractor: JINJA2 - Custom Template-Based Extraction                        ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║  Use Case: Complex transformations, computations, conditional extraction     ║
+        ║  Features: Full Jinja2 syntax, filters, conditionals, custom logic           ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+      
+      on_state_leave: |
+        ✅ Jinja2 Extraction Results:
+        • Computed Value: {{ jinja2_extractor_demo.computed_value }}
+        • Uppercase Author: {{ jinja2_extractor_demo.uppercase_author }}
+        • Has Slides: {{ jinja2_extractor_demo.has_slides }}
+        • Slide Summary: {{ jinja2_extractor_demo.slide_summary }}
+        
+        💡 Jinja2 Extractor:
+        • Access: response.text, response.json(), response.status_code
+        • Filters: | upper, | lower, | length, | default
+        • Logic: if/else, loops, string operations
+        • Use for: Complex data transformations
+    
+    next:
+      - goto: summary_state
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Summary: When to use each extractor
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  summary_state:
+    description: "Summary of extractors"
+    
+    request: |
+      GET /get HTTP/1.1
+      Host: {{ target.host }}
+    
+    logger:
+      on_state_enter: |
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  📊 Extractors Comparison                                                    ║
+        ╠══════════════════════════════════════════════════════════════════════════════╣
+        ║                                                                              ║
+        ║  REGEX                                                                       ║
+        ║  • Best for: Pattern matching in any text                                    ║
+        ║  • Use when: No structured format (HTML without valid markup)                ║
+        ║  • Example: <input name="csrf" value="([^"]+)">                              ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  JPATH (JSONPath)                                                            ║
+        ║  • Best for: JSON APIs                                                       ║
+        ║  • Use when: Response is JSON                                                ║
+        ║  • Example: $.user.token                                                     ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  XPATH                                                                       ║
+        ║  • Best for: HTML/XML documents                                              ║
+        ║  • Use when: Valid HTML structure                                            ║
+        ║  • Example: //input[@name="csrf"]/@value                                     ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  COOKIE                                                                      ║
+        ║  • Best for: Session tokens, auth cookies                                    ║
+        ║  • Use when: Extracting from Set-Cookie                                      ║
+        ║  • Example: session                                                          ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  HEADER                                                                      ║
+        ║  • Best for: Response metadata, rate limits                                  ║
+        ║  • Use when: Data in HTTP headers                                            ║
+        ║  • Example: X-CSRF-Token                                                     ║
+        ║                                                                              ║
+        ║  ──────────────────────────────────────────────────────────────────────────  ║
+        ║                                                                              ║
+        ║  JINJA2                                                                      ║
+        ║  • Best for: Complex transformations                                         ║
+        ║  • Use when: Need computation or logic                                       ║
+        ║  • Example: {{ response.json().data | length }}                              ║
+        ║                                                                              ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
+        
+        🎯 Quick Decision Guide:
+        
+        Q: Extracting from JSON?
+        → Use JPATH
+        
+        Q: Extracting from HTML form?
+        → Use XPATH (faster) or REGEX (more flexible)
+        
+        Q: Need a cookie value?
+        → Use COOKIE
+        
+        Q: Need a header value?
+        → Use HEADER
+        
+        Q: Need transformation or computation?
+        → Use JINJA2
+        
+        Q: Unstructured text?
+        → Use REGEX
+        
+        ╔══════════════════════════════════════════════════════════════════════════════╗
+        ║  ✅ Extractors Demo Complete!                                                ║
+        ╚══════════════════════════════════════════════════════════════════════════════╝
