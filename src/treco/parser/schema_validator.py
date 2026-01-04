@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
+from importlib.resources import files 
+
 from jsonschema import validate, ValidationError, Draft7Validator
 from jsonschema.exceptions import best_match
 
@@ -41,14 +43,34 @@ class SchemaValidator:
             schema_path: Path to JSON schema file. If None, uses bundled schema.
         """
         if schema_path is None:
-            # Use bundled schema
-            package_dir = Path(__file__).parent.parent.parent.parent
-            schema_path = package_dir / "schema" / "treco-config.schema.json"
-
-        self.schema_path = Path(schema_path)
-        self.schema = self._load_schema()
+            self.schema = self._load_bundled_schema()
+        else:
+            self.schema_path = Path(schema_path)
+            self.schema = self._load_schema_from_file(self.schema_path)
+        
         self.validator = Draft7Validator(self.schema)
 
+    def _load_bundled_schema(self) -> Dict[str, Any]:
+        """Load bundled schema from package resources."""
+        try:
+            # Python 3.9+ way
+            schema_file = files('treco.parser.schema').joinpath('treco-config.schema.json')
+            schema_text = schema_file.read_text(encoding='utf-8')
+            return json.loads(schema_text)
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Failed to load bundled schema: {e}. "
+                "Please ensure the package is installed correctly."
+            )
+
+    def _load_schema_from_file(self, schema_path: Path) -> Dict[str, Any]:
+        """Load JSON schema from file path."""
+        if not schema_path.exists():
+            raise FileNotFoundError(f"Schema file not found: {schema_path}")
+
+        with open(schema_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+        
     def _load_schema(self) -> Dict[str, Any]:
         """Load JSON schema from file."""
         if not self.schema_path.exists():

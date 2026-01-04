@@ -60,6 +60,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/treco"]
 
+[tool.setuptools.package-data]
+"treco.parser.schema" = ["*.json"]
+
 # =============================================================================
 # Semantic Release
 # =============================================================================
