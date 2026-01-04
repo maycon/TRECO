@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import ClassVar, Optional
 
 from .counter import MetricsCounter
 from .timer import MetricsTimer
@@ -6,9 +6,9 @@ from .timer import MetricsTimer
 class MetricsRegistry:
     """Central registry for metrics components."""
     
-    _timer: Optional['MetricsTimer'] = None
-    _counter: Optional['MetricsCounter'] = None
-    _enabled: bool = False
+    _timer: ClassVar[Optional[MetricsTimer]] = None
+    _counter: ClassVar[Optional[MetricsCounter]] = None
+    _enabled: ClassVar[bool] = False
     
     @classmethod
     def initialize(cls, enabled: bool = True):
@@ -21,17 +21,21 @@ class MetricsRegistry:
         cls._counter = MetricsCounter(enabled=enabled)
     
     @classmethod
-    def get_timer(cls) -> Optional['MetricsTimer']:
+    def get_timer(cls) -> MetricsTimer:
         """Get timer instance."""
         if cls._timer is None:
             cls.initialize(enabled=False)
+        
+        assert cls._timer is not None
+
         return cls._timer
     
     @classmethod
-    def get_counter(cls) -> Optional['MetricsCounter']:
+    def get_counter(cls) -> MetricsCounter:
         """Get counter instance."""
         if cls._counter is None:
             cls.initialize(enabled=False)
+        assert cls._counter is not None  # Type guard
         return cls._counter
     
     @classmethod

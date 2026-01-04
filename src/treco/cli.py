@@ -1,3 +1,4 @@
+from pathlib import Path
 import click
 import os
 import json
@@ -133,8 +134,20 @@ def apply_type_hint(value: Any, type_hint: str) -> Any:
     is_flag=True,
     help='Validate configuration without executing the attack'
 )
+@click.option(
+    '--metrics',
+    is_flag=True,
+    help='Enable performance metrics collection'
+)
+@click.option(
+    '--metrics-output',
+    type=click.Path(),
+    default=None,
+    help='Save metrics report to file (JSON)'
+)
 def main(config_file: str, variables: Dict[str, Any], log_level: str, 
-         no_banner: bool, validate_only: bool):
+         no_banner: bool, validate_only: bool,
+         metrics: bool, metrics_output: str):
     """
     TRECO - Tactical Race Exploitation & Concurrency Orchestrator
     
@@ -152,16 +165,40 @@ def main(config_file: str, variables: Dict[str, Any], log_level: str,
     # Setup logging with configured level
     setup_logging(log_level)
 
+    # Initialize metrics if enabled
+    if metrics:
+        from treco.metrics import MetricsRegistry
+        MetricsRegistry.initialize(enabled=True)
+        print(success("📊 Metrics collection enabled"))
+
     # Print banner (unless suppressed or validating only)
     if not no_banner and not validate_only:
         print_banner()
     
     # Run validation or full attack
+    results = None
     if validate_only:
-        return validate_config(config_file)
+        results = validate_config(config_file)
     else:
         results = run_attack(config_file, variables)
-        return results
+
+    # Generate metrics report at the end
+    if metrics:
+        from treco.metrics import MetricsRegistry, MetricsReporter
+        
+        timer = MetricsRegistry.get_timer()
+        counter = MetricsRegistry.get_counter()
+        report = MetricsReporter.generate_report(timer, counter)
+        
+        # Print to console
+        MetricsReporter.print_report(report)
+        
+        # Save to file if specified
+        if metrics_output:
+            MetricsReporter.save_report(report, Path(metrics_output))
+            print(success(f"📁 Metrics saved to {metrics_output}"))
+
+    return results
 
 
 def validate_config(config_path: str) -> int:
